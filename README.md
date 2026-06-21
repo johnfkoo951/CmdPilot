@@ -23,6 +23,14 @@
   <img src="https://img.shields.io/badge/built%20with-Claude%20Code-6B6B6B">
 </p>
 
+## 🎬 Demo
+
+<p align="center">
+  <video src="https://github.com/joonlab/MacPilot/raw/main/docs/macpilot-demo.mp4" controls muted width="300"></video>
+</p>
+
+> ▶︎ 플레이어가 안 보이면 [데모 영상 보기](docs/macpilot-demo.mp4)
+
 ---
 
 ## What is this?
