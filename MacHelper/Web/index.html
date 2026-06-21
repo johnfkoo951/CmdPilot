@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MacPilot">
+  <meta name="theme-color" content="#141416">
+  <title>MacPilot · JoonLab</title>
+  <link rel="icon" href="/logo.png">
+  <link rel="apple-touch-icon" href="/logo.png">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header id="bar">
+    <span class="logo-wrap"><img class="logo-img" src="/logo-mark-dark.png" alt="JoonLab"></span>
+    <span id="dot" class="dot"></span>
+    <span id="status">연결 중…</span>
+    <button id="settings-btn" class="gear" aria-label="설정">⚙</button>
+  </header>
+
+  <main>
+    <!-- 키보드 -->
+    <section id="panel-keyboard" class="panel">
+      <div class="kb-mods" id="kb-mods">
+        <button class="modchip" data-mod="command">⌘</button>
+        <button class="modchip" data-mod="control">⌃</button>
+        <button class="modchip" data-mod="shift">⇧</button>
+        <button class="modchip" data-mod="option">⌥</button>
+        <span class="kb-modtip">켜두면 입력 키가 조합키로 전송</span>
+      </div>
+      <div class="kb-special" id="kb-special">
+        <button class="sp" data-key="53">esc</button>
+        <button class="sp" data-key="48">⇥</button>
+        <button class="sp" data-key="51">⌫</button>
+        <button class="sp" data-key="36">return</button>
+        <button class="sp" data-key="123">←</button>
+        <button class="sp" data-key="126">↑</button>
+        <button class="sp" data-key="125">↓</button>
+        <button class="sp" data-key="124">→</button>
+      </div>
+      <textarea id="kb-input" placeholder="여기에 입력하면 맥에 타이핑됩니다"
+                autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+      <div class="kb-foot">
+        <span></span>
+        <button id="kb-clear">지우기</button>
+      </div>
+    </section>
+
+    <!-- 덱 -->
+    <section id="panel-deck" class="panel active">
+      <div class="deck-head">
+        <div id="folder-tabs" class="folder-tabs"></div>
+        <button id="deck-edit" class="deck-edit">편집</button>
+      </div>
+      <div id="deck-toolbar" class="deck-toolbar"></div>
+      <div id="deck-pages" class="deck-pages"></div>
+      <div id="page-dots" class="page-dots"></div>
+    </section>
+
+    <!-- 트랙패드 시트 (어디서나 핸들로 끌어올려 소환) -->
+    <div id="tp-sheet">
+      <div id="tp-handle"><span class="grab"></span><span class="lbl">트랙패드</span></div>
+      <div id="trackpad">
+        <div id="hint">한 손가락: 이동/탭 · 두 손가락: 스크롤·핀치·우클릭 · 세 손가락: ⌘←→ / 미션컨트롤</div>
+      </div>
+    </div>
+  </main>
+
+  <nav id="tabbar">
+    <button class="tab" data-tab="keyboard"><span>⌨︎</span>키보드</button>
+    <button class="tab active" data-tab="deck"><span>⊞</span>덱</button>
+  </nav>
+
+  <div id="modal-root"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
