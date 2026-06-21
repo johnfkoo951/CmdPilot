@@ -99,12 +99,13 @@ Builds a Release app into `~/Applications` and installs a **launchd LaunchAgent*
 | Gesture (on phone trackpad) | Action on Mac |
 |---|---|
 | 1-finger move / tap | Move cursor / left click |
-| Double-tap · two-finger tap | Double click · right click |
+| Double-tap | Double click |
 | Tap then drag | Drag (select / move) |
 | Two-finger drag | Scroll (with momentum) |
 | Two-finger pinch | Zoom (⌘+/−) |
 | Three-finger ←→ | ⌘← / ⌘→ |
 | Three-finger ↑ / ↓ | Mission Control / App Exposé |
+| **Left / Right click buttons** (below the pad) | Click — or **press-and-hold + drag on the pad** for a real drag-select / move |
 
 ## Architecture
 

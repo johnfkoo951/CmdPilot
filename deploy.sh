@@ -11,12 +11,22 @@ xcodebuild -project MacPilot.xcodeproj -scheme MacPilotHelper -configuration Rel
 
 # 키체인의 Apple Development 인증서로 재서명 → 고정 서명(손쉬운 사용 권한 유지).
 # (xcodebuild 자동서명은 CLI에서 계정 세션을 못 잡아 실패하므로 codesign 으로 직접 서명)
+# 인증서 조회가 가끔 깜빡이므로 재시도 + 결과 검증.
 APP_SRC="./.release/Build/Products/Release/MacPilot Helper.app"
-CERT=$(security find-identity -v -p codesigning | grep "Apple Development" | head -1 | awk '{print $2}')
-if [ -n "$CERT" ] && codesign --force --deep --sign "$CERT" "$APP_SRC" >/dev/null 2>&1; then
-  echo "▸ 인증서 재서명 OK ($CERT)"
-else
-  echo "  ⚠️  Apple Development 인증서 없음/실패 → ad-hoc (재배포 때마다 손쉬운 사용 권한 재설정 필요)"
+signed=0
+for attempt in 1 2 3 4; do
+  CERT=$(security find-identity -v -p codesigning 2>/dev/null | grep "Apple Development" | head -1 | awk '{print $2}')
+  if [ -n "$CERT" ]; then
+    codesign --force --deep --sign "$CERT" "$APP_SRC" >/dev/null 2>&1
+    if codesign -dvv "$APP_SRC" 2>&1 | grep -q "Apple Development"; then
+      echo "▸ 인증서 재서명 OK ($CERT)"; signed=1; break
+    fi
+  fi
+  sleep 1
+done
+if [ "$signed" != "1" ]; then
+  echo "  ⚠️  재서명 실패 → ad-hoc. 수동: codesign --force --deep --sign <인증서> '$HOME/Applications/MacPilot Helper.app' 후 launchctl kickstart"
+  exit 1
 fi
 
 echo "▸ ~/Applications 갱신…"

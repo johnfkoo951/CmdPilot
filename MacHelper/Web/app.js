@@ -148,6 +148,31 @@
   });
   window.addEventListener("resize", () => applySheet(sheetOpen ? 0 : closedOffset(), false));
 
+  // 좌/우 클릭 버튼 — 누르고 있으면 마우스 버튼이 '눌린 채' 유지.
+  // → 좌클릭 누른 채 다른 손가락으로 트랙패드 드래그하면 진짜 드래그-선택.
+  // → 짧게 눌렀다 떼면 down+up = 일반 클릭.
+  let leftHeld = false, rightHeld = false;
+  function buttonHeld() { return leftHeld || rightHeld; }
+  function setupClickButton(btn, button) {
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      try { btn.setPointerCapture(e.pointerId); } catch (err) {}
+      if (button === "left") leftHeld = true; else rightHeld = true;
+      btn.classList.add("held");
+      send({ t: "down", button });
+    });
+    const release = () => {
+      if (button === "left") { if (!leftHeld) return; leftHeld = false; }
+      else { if (!rightHeld) return; rightHeld = false; }
+      btn.classList.remove("held");
+      send({ t: "up", button });
+    };
+    btn.addEventListener("pointerup", release);
+    btn.addEventListener("pointercancel", release);
+  }
+  setupClickButton(document.getElementById("click-left"), "left");
+  setupClickButton(document.getElementById("click-right"), "right");
+
   // ═════════ 키보드 탭 ═════════
   let activeMods = [];
   function refreshModChips() {
@@ -743,7 +768,7 @@
       startTime = now(); moved = false; maxTouches = 1; dragging = false;
       threeMode = false; g3fired = false; g3start = null; g3last = null; twoMode = null;
       last = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      armedForDrag = (now() - lastTapEnd) < DOUBLE_MS;
+      armedForDrag = !buttonHeld() && (now() - lastTapEnd) < DOUBLE_MS;
     } else { maxTouches = Math.max(maxTouches, n); armedForDrag = false; }
     if (n === 2) { twoMode = null; d0 = dist2(e.touches); c0 = centroid(e.touches); lastZoomDist = d0; }
     if (n >= 3 && !threeMode) { threeMode = true; g3start = centroid(e.touches); g3last = g3start; }
@@ -797,7 +822,7 @@
       if (dragging) { send({ t: "up", button: "left" }); dragging = false; }
       else {
         const duration = now() - startTime;
-        if (!moved && duration < TAP_MS) {
+        if (!moved && duration < TAP_MS && !buttonHeld()) {
           if (maxTouches >= 2) { send({ t: "click", button: "right" }); clickCount = 0; lastClickTime = 0; }
           else { const t = now(); clickCount = (t - lastClickTime < DOUBLE_MS) ? clickCount + 1 : 1; lastClickTime = t; send({ t: "click", button: "left", count: clickCount }); }
           lastTapEnd = now();

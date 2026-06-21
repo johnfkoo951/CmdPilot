@@ -72,8 +72,11 @@ main { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 #tp-handle.open .lbl::after { content: " ▾"; }
 #tp-handle:not(.open) .lbl::after { content: " ▴"; }
 
-#tp-sheet #trackpad { margin: 8px 12px 12px; }
+#tp-sheet #trackpad { margin: 8px 12px 8px; }
 #trackpad { flex: 1; position: relative; background: var(--surface); border-radius: 18px; touch-action: none; overflow: hidden; border: 1px solid var(--border); }
+#click-bar { display: flex; gap: 8px; padding: 0 12px 12px; flex: 0 0 auto; }
+#click-bar button { flex: 1; padding: 16px 0; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 12px; font-size: 15px; }
+#click-bar button:active, #click-bar button.held { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 #hint { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font-size: 12px; line-height: 1.4; color: var(--text-mute); padding: 0 16px; }
 
 /* 키보드 */
