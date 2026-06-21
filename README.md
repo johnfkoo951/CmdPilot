@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <a href="https://pub-81d14e6ebfb841109968e9c0ee057d1b.r2.dev/macpilot/macpilot-demo.mp4">▶︎ Full video with sound (mp4)</a>
+  <a href="https://pub-81d14e6ebfb841109968e9c0ee057d1b.r2.dev/macpilot/macpilot-demo.mp4">▶︎ Open as mp4 file</a>
 </p>
 
 ---
