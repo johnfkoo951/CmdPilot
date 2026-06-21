@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="MacHelper/Web/logo.png" width="200" alt="JoonLab">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="MacHelper/Web/logo-mark-dark.png">
+    <img src="MacHelper/Web/logo-mark.png" width="240" alt="JoonLab">
+  </picture>
 </p>
 
 <h1 align="center">MacPilot</h1>
