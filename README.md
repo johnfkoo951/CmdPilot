@@ -26,10 +26,10 @@
 ## 🎬 Demo
 
 <p align="center">
-  <video src="https://github.com/joonlab/MacPilot/raw/main/docs/macpilot-demo.mp4" controls muted width="300"></video>
+  <video src="https://pub-81d14e6ebfb841109968e9c0ee057d1b.r2.dev/macpilot/macpilot-demo.mp4" controls muted width="300"></video>
 </p>
 
-> ▶︎ 플레이어가 안 보이면 [데모 영상 보기](docs/macpilot-demo.mp4)
+> ▶︎ 재생이 안 되면 [데모 영상 보기](docs/macpilot-demo.mp4)
 
 ---
 
