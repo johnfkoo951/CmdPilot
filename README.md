@@ -26,10 +26,12 @@
 ## 🎬 Demo
 
 <p align="center">
-  <video src="https://pub-81d14e6ebfb841109968e9c0ee057d1b.r2.dev/macpilot/macpilot-demo.mp4" controls muted width="300"></video>
+  <img src="docs/macpilot-demo.gif" width="300" alt="MacPilot demo">
 </p>
 
-> ▶︎ 재생이 안 되면 [데모 영상 보기](docs/macpilot-demo.mp4)
+<p align="center">
+  <a href="https://pub-81d14e6ebfb841109968e9c0ee057d1b.r2.dev/macpilot/macpilot-demo.mp4">▶︎ Full video with sound (mp4)</a>
+</p>
 
 ---
 
