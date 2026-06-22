@@ -137,6 +137,10 @@ A separate **Windows helper** (C# / .NET 9) lives under [`WindowsHelper/`](Windo
 **same web client and WebSocket protocol** — the macOS build is untouched. It runs as a tray app:
 a `TcpListener` HTTP+WebSocket server + Win32 `SendInput` injection, **zero runtime NuGet dependencies**.
 
+<p align="center">
+  <img src="docs/img/windows-architecture.png" width="760" alt="MacPilot Windows port architecture: phone browser → Wi-Fi/LAN HTTP+WebSocket:8765 → Windows helper (TcpListener, Command Dispatcher, SendInput, app launch, volume, optional PIN pairing)">
+</p>
+
 - 👉 Build / run / firewall / troubleshooting: **[docs/WINDOWS.md](docs/WINDOWS.md)**
 - 👉 Port strategy & design rationale: **[docs/WINDOWS_MIGRATION_PLAN.md](docs/WINDOWS_MIGRATION_PLAN.md)**
 

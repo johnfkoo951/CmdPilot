@@ -4,6 +4,11 @@
 > 추가하는 이행 계획과 설계 근거를 정리한 문서입니다. macOS 소스(`MacHelper/Sources`, `project.yml`,
 > `deploy.sh`)는 **수정하지 않았습니다.**
 
+![MacPilot Windows 포트 구조도](img/windows-architecture.png)
+
+> 폰 브라우저 → Wi-Fi/LAN(HTTP + WebSocket:8765) → Windows helper(TcpListener · Command Dispatcher ·
+> Win32 SendInput · 앱 실행 · 볼륨 · 선택적 PIN 페어링). 단방향 데이터 흐름.
+
 ## 1. 현재 구조 (macOS)
 
 ```
