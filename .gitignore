@@ -21,3 +21,6 @@ xcuserdata/
 iOSApp/
 Shared/
 project.local.yml
+
+# 세션 핸드오프(로컬 전용)
+context/
