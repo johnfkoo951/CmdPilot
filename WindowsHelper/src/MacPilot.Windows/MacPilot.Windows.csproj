@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    MacPilot Windows helper — Option B architecture:
+    TcpListener + System.Net.WebSockets.WebSocket.CreateFromStream + WinForms NotifyIcon tray.
+    Zero runtime NuGet dependencies (BCL + Windows Desktop framework only).
+    The phone web client (MacHelper/Web) is REUSED unchanged, embedded as resources.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>MacPilot.Windows</AssemblyName>
+    <RootNamespace>MacPilot.Windows</RootNamespace>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifier Condition="'$(PublishSingleFile)' == 'true'">win-x64</RuntimeIdentifier>
+    <Version>0.2.0</Version>
+    <Product>MacPilot Windows Helper</Product>
+  </PropertyGroup>
+
+  <!--
+    Reuse the macOS web client verbatim by LINKING (not copying) the existing files
+    from MacHelper/Web as embedded resources. Single source of truth; macOS build untouched.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\..\MacHelper\Web\index.html">
+      <LogicalName>web/index.html</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\..\MacHelper\Web\app.js">
+      <LogicalName>web/app.js</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\..\MacHelper\Web\style.css">
+      <LogicalName>web/style.css</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\..\MacHelper\Web\logo.png">
+      <LogicalName>web/logo.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\..\MacHelper\Web\logo-mark.png">
+      <LogicalName>web/logo-mark.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\..\MacHelper\Web\logo-mark-dark.png">
+      <LogicalName>web/logo-mark-dark.png</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>
