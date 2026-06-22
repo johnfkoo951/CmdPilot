@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <!--
+    Per-Monitor-V2 DPI awareness so SetCursorPos / absolute SendInput coordinates are
+    physical pixels and stay correct across mixed-DPI multi-monitor setups.
+    Runs as a normal user (asInvoker) — NO admin elevation (honors the no-admin constraint).
+  -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <!--
+    DPI awareness is configured in code via Application.SetHighDpiMode(PerMonitorV2) (Program.cs),
+    which is the WinForms-recommended path; the manifest only declares run level + OS support.
+  -->
+
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 and 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+    </application>
+  </compatibility>
+</assembly>

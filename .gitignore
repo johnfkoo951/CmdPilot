@@ -21,3 +21,13 @@ xcuserdata/
 iOSApp/
 Shared/
 project.local.yml
+
+# Windows / .NET (WindowsHelper) build artifacts
+[Bb]in/
+[Oo]bj/
+publish/
+*.user
+*.suo
+.vs/
+WindowsHelper/**/bin/
+WindowsHelper/**/obj/
