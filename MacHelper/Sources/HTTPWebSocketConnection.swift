@@ -2,6 +2,29 @@ import CryptoKit
 import Foundation
 import Network
 
+/// 번들 정적 자산을 시작 시 1회만 메모리에 적재 → 요청마다 디스크 I/O 없음.
+/// (현장에서 여러 기기가 동시에 페이지를 받아도 즉시 응답)
+private enum AssetCache {
+    struct Item { let data: Data; let mime: String }
+    static let table: [String: Item] = {
+        func load(_ name: String, _ ext: String, _ mime: String) -> Item? {
+            guard let url = Bundle.main.url(forResource: name, withExtension: ext),
+                  let data = try? Data(contentsOf: url) else { return nil }
+            return Item(data: data, mime: mime)
+        }
+        var t: [String: Item] = [:]
+        if let a = load("index", "html", "text/html; charset=utf-8") { t["/"] = a; t["/index.html"] = a }
+        if let a = load("app", "js", "application/javascript; charset=utf-8") { t["/app.js"] = a }
+        if let a = load("style", "css", "text/css; charset=utf-8") { t["/style.css"] = a }
+        if let a = load("logo", "png", "image/png") {
+            for p in ["/logo.png", "/favicon.ico", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png"] { t[p] = a }
+        }
+        if let a = load("logo-mark", "png", "image/png") { t["/logo-mark.png"] = a }
+        if let a = load("logo-mark-dark", "png", "image/png") { t["/logo-mark-dark.png"] = a }
+        return t
+    }()
+}
+
 /// 단일 TCP 연결을 받아 (1) 정적 파일 HTTP 응답 또는 (2) WebSocket 업그레이드를
 /// 처리하는 미니 서버 커넥션. 외부 의존성 없이 직접 프레이밍을 구현한다.
 ///
@@ -12,6 +35,7 @@ final class HTTPWebSocketConnection {
     private var buffer = [UInt8]()
     private var didUpgrade = false
     private var closing = false
+    private var idleWork: DispatchWorkItem?   // 유효 요청 없이 매달린 연결 정리용
 
     var onCommand: ((InboundCommand) -> Void)?
     var onUpgrade: (() -> Void)?
@@ -31,6 +55,14 @@ final class HTTPWebSocketConnection {
             }
         }
         connection.start(queue: .global(qos: .userInitiated))
+        // 15초 안에 정상 요청(정적 서빙 or WS 업그레이드)이 없으면 연결을 끊는다.
+        // → 포트 스캐너/half-open 연결이 쌓여 FD를 잠그는 것을 방지.
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, !self.didUpgrade, !self.closing else { return }
+            self.closeNow()
+        }
+        idleWork = work
+        DispatchQueue.global().asyncAfter(deadline: .now() + 15, execute: work)
         receiveLoop()
     }
 
@@ -105,36 +137,25 @@ final class HTTPWebSocketConnection {
         """
         connection.send(content: Data(response.utf8), completion: .contentProcessed { _ in })
         didUpgrade = true
+        idleWork?.cancel()   // 정상 WS 연결은 타임아웃 대상 아님(상시 유지)
         onUpgrade?()
         parseFrames() // 버퍼에 남은 프레임 즉시 처리
     }
 
     private func serveStatic(path: String) {
         let clean = path.split(separator: "?").first.map(String.init) ?? path
-        let asset: (name: String, ext: String, mime: String)?
-        switch clean {
-        case "/", "/index.html": asset = ("index", "html", "text/html; charset=utf-8")
-        case "/app.js":          asset = ("app", "js", "application/javascript; charset=utf-8")
-        case "/style.css":       asset = ("style", "css", "text/css; charset=utf-8")
-        case "/logo.png", "/favicon.ico", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png":
-                                 asset = ("logo", "png", "image/png")
-        case "/logo-mark.png":   asset = ("logo-mark", "png", "image/png")
-        case "/logo-mark-dark.png": asset = ("logo-mark-dark", "png", "image/png")
-        default:                 asset = nil
+        idleWork?.cancel()
+        guard let item = AssetCache.table[clean] else {
+            sendSimple(status: "404 Not Found", body: "Not Found"); return
         }
 
-        guard let asset,
-              let url = Bundle.main.url(forResource: asset.name, withExtension: asset.ext),
-              let body = try? Data(contentsOf: url)
-        else { sendSimple(status: "404 Not Found", body: "Not Found"); return }
-
         let head = "HTTP/1.1 200 OK\r\n"
-            + "Content-Type: \(asset.mime)\r\n"
-            + "Content-Length: \(body.count)\r\n"
+            + "Content-Type: \(item.mime)\r\n"
+            + "Content-Length: \(item.data.count)\r\n"
             + "Cache-Control: no-store\r\n"
             + "Connection: close\r\n\r\n"
         var response = Data(head.utf8)
-        response.append(body)
+        response.append(item.data)
         closing = true
         connection.send(content: response, completion: .contentProcessed { [weak self] _ in
             self?.connection.cancel()
@@ -151,6 +172,7 @@ final class HTTPWebSocketConnection {
 
     private func closeNow() {
         closing = true
+        idleWork?.cancel()
         connection.cancel()
     }
 

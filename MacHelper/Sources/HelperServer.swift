@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import Darwin
 import Foundation
 import Network
 
@@ -23,13 +24,31 @@ final class HelperServer: ObservableObject {
     private var upgradedKeys: Set<ObjectIdentifier> = []
     private var accessibilityTimer: Timer?
 
+    // 연결 장부는 전용 직렬 큐에서만 다룬다(메인 스레드 분리 → 다수 동시접속에도 응답 안 밀림)
+    private let serverQueue = DispatchQueue(label: "com.joonlab.macpilot.server")
+    private let maxConnections = 256   // 폭주(포트 스캐너 등) 시 FD 고갈 방지용 상한
+
     init() {
+        HelperServer.raiseFileDescriptorLimit()
         resetLog()
         start()
         refreshAccessibility()
         // 권한 상태가 항상 최신으로 보이도록 주기적으로 갱신
         accessibilityTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             self?.refreshAccessibility()
+        }
+        // 앱 목록(아이콘 렌더)을 시작 직후 1회 미리 빌드→캐시. 이후 getApps 는 메인 블록 없이 즉시 응답.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { _ = AppList.json() }
+    }
+
+    /// 프로세스 파일 디스크립터 소프트 한도를 올린다(기본값이 낮으면 다수 동시접속 때 소켓 고갈 → 흰 화면).
+    private static func raiseFileDescriptorLimit() {
+        var lim = rlimit()
+        guard getrlimit(RLIMIT_NOFILE, &lim) == 0 else { return }
+        let target: rlim_t = 4096
+        if lim.rlim_cur < target {
+            lim.rlim_cur = min(target, lim.rlim_max)
+            _ = setrlimit(RLIMIT_NOFILE, &lim)
         }
     }
 
@@ -52,7 +71,7 @@ final class HelperServer: ObservableObject {
                 }
             }
             listener.newConnectionHandler = { [weak self] connection in
-                DispatchQueue.main.async { self?.accept(connection) }
+                self?.accept(connection)   // 메인 X — 전용 큐에서 처리
             }
             listener.start(queue: .global(qos: .userInitiated))
             self.listener = listener
@@ -66,48 +85,73 @@ final class HelperServer: ObservableObject {
         let key = ObjectIdentifier(client)
 
         client.onCommand = { [weak self, weak client] command in
-            // 덱 동기화 명령은 입력 주입이 아니라 별도 처리
-            switch command.t {
-            case "getDeck":
-                let json = DeckStore.loadString() ?? "null"
-                client?.sendText("{\"t\":\"deck\",\"json\":\(json)}")
-                return
-            case "saveDeck":
-                if let json = command.deckJson { DeckStore.save(json) }
-                return
-            case "getApps":
-                // 아이콘 렌더(AppKit)는 main 에서. 최초 1회만 빌드되고 캐시됨.
-                DispatchQueue.main.async {
-                    client?.sendText("{\"t\":\"apps\",\"list\":\(AppList.json())}")
-                }
-                return
-            default:
-                break
-            }
-            self?.logCommand(command)
-            DispatchQueue.main.async {
-                self?.commandCount += 1
-                self?.lastCommand = command.dir.map { "\(command.t):\($0)" } ?? command.t
-            }
-            EventInjector.perform(command)
+            self?.handleCommand(command, client: client)
         }
         client.onUpgrade = { [weak self] in
-            DispatchQueue.main.async {
-                self?.upgradedKeys.insert(key)
-                self?.activeClients = self?.upgradedKeys.count ?? 0
+            guard let self else { return }
+            self.serverQueue.async { [weak self] in
+                guard let self else { return }
+                self.upgradedKeys.insert(key)
+                let n = self.upgradedKeys.count
+                DispatchQueue.main.async { [weak self] in self?.activeClients = n }
             }
         }
         client.onClose = { [weak self] in
             EventInjector.releaseAll()  // 드래그 중 연결이 끊겨도 버튼이 눌린 채 남지 않도록
-            DispatchQueue.main.async {
-                self?.connections[key] = nil
-                self?.upgradedKeys.remove(key)
-                self?.activeClients = self?.upgradedKeys.count ?? 0
+            guard let self else { return }
+            self.serverQueue.async { [weak self] in
+                guard let self else { return }
+                self.connections[key] = nil
+                self.upgradedKeys.remove(key)
+                let n = self.upgradedKeys.count
+                DispatchQueue.main.async { [weak self] in self?.activeClients = n }
             }
         }
 
-        connections[key] = client
-        client.start()
+        // 연결 등록·시작은 전용 큐에서. 동시연결 상한 초과 시 새 연결 거절(폭주 방어).
+        serverQueue.async { [weak self] in
+            guard let self else { connection.cancel(); return }
+            if self.connections.count >= self.maxConnections {
+                connection.cancel()
+                return
+            }
+            self.connections[key] = client
+            client.start()
+        }
+    }
+
+    /// WebSocket 으로 들어온 명령 처리. move/scroll(고빈도)은 메인 UI 갱신을 건너뛰고 주입만 한다.
+    private func handleCommand(_ command: InboundCommand, client: HTTPWebSocketConnection?) {
+        switch command.t {
+        case "getDeck":
+            let json = DeckStore.loadString() ?? "null"
+            client?.sendText("{\"t\":\"deck\",\"json\":\(json)}")
+            return
+        case "saveDeck":
+            if let json = command.deckJson { DeckStore.save(json) }
+            return
+        case "getApps":
+            // 캐시 준비됐으면 즉시(오프메인) 응답. 아직이면 main 에서 1회 빌드(드문 경우).
+            if let cached = AppList.cachedJSONIfReady() {
+                client?.sendText("{\"t\":\"apps\",\"list\":\(cached)}")
+            } else {
+                DispatchQueue.main.async {
+                    client?.sendText("{\"t\":\"apps\",\"list\":\(AppList.json())}")
+                }
+            }
+            return
+        default:
+            break
+        }
+        let t = command.t
+        if t != "move", t != "scroll" {
+            logCommand(command)
+            DispatchQueue.main.async { [weak self] in
+                self?.commandCount += 1
+                self?.lastCommand = command.dir.map { "\(t):\($0)" } ?? t
+            }
+        }
+        EventInjector.perform(command)
     }
 
     private func updateURL() {

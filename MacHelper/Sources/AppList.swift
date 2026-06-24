@@ -6,6 +6,9 @@ import Foundation
 enum AppList {
     private static var cachedJSON: String?
 
+    /// 이미 빌드된 캐시가 있으면 반환(없으면 nil). 부하 중 메인 스레드 블록을 피하려고 사용.
+    static func cachedJSONIfReady() -> String? { cachedJSON }
+
     static func json() -> String {
         if let cached = cachedJSON { return cached }
 
