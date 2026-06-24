@@ -17,6 +17,10 @@ final class HelperServer: ObservableObject {
     @Published var commandCount = 0
     @Published var lastCommand = "-"
 
+    // 선택적 PIN 페어링(같은 Wi-Fi의 타인 접속 차단)
+    @Published var pairingEnabled = false
+    @Published var pairingPin = ""
+
     let port: UInt16 = 8765
 
     private var listener: NWListener?
@@ -27,6 +31,7 @@ final class HelperServer: ObservableObject {
     // 연결 장부는 전용 직렬 큐에서만 다룬다(메인 스레드 분리 → 다수 동시접속에도 응답 안 밀림)
     private let serverQueue = DispatchQueue(label: "com.joonlab.macpilot.server")
     private let maxConnections = 256   // 폭주(포트 스캐너 등) 시 FD 고갈 방지용 상한
+    private let pairing = Pairing()    // 선택적 PIN 페어링(기본 off)
 
     init() {
         HelperServer.raiseFileDescriptorLimit()
@@ -39,6 +44,30 @@ final class HelperServer: ObservableObject {
         }
         // 앱 목록(아이콘 렌더)을 시작 직후 1회 미리 빌드→캐시. 이후 getApps 는 메인 블록 없이 즉시 응답.
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { _ = AppList.json() }
+        // 페어링 상태를 UI 로 미러
+        pairingEnabled = pairing.enabled
+        pairingPin = pairing.pin
+    }
+
+    // MARK: - PIN 페어링
+
+    func setPairing(_ on: Bool) {
+        pairing.setEnabled(on)
+        pairingEnabled = on
+        if on { closeAllConnections() }   // 켜는 순간 기존 연결을 끊어 재페어링 강제
+    }
+
+    func regeneratePairingPin() {
+        pairing.regeneratePin()
+        pairingPin = pairing.pin
+        closeAllConnections()             // PIN 변경 → 기존 쿠키 무효 → 끊어서 재페어링
+    }
+
+    private func closeAllConnections() {
+        serverQueue.async { [weak self] in
+            guard let self else { return }
+            for c in self.connections.values { c.forceClose() }
+        }
     }
 
     /// 프로세스 파일 디스크립터 소프트 한도를 올린다(기본값이 낮으면 다수 동시접속 때 소켓 고갈 → 흰 화면).
@@ -81,7 +110,7 @@ final class HelperServer: ObservableObject {
     }
 
     private func accept(_ connection: NWConnection) {
-        let client = HTTPWebSocketConnection(connection: connection)
+        let client = HTTPWebSocketConnection(connection: connection, pairing: pairing)
         let key = ObjectIdentifier(client)
 
         client.onCommand = { [weak self, weak client] command in

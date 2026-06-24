@@ -164,7 +164,7 @@ dotnet run --project .\WindowsHelper\src\MacPilot.Windows
 | Screen brightness | ✅ | ⚠️ laptop panel only (WMI, best-effort) |
 | 3-finger gestures / pinch-zoom | ✅ | ⚠️ best-effort key mappings (Win+Tab / Ctrl+Win+←→ / Ctrl±) |
 | Always-on server | launchd | tray app (+ optional Startup shortcut, see scripts/) |
-| Optional PIN pairing | n/a | ✅ `--pin` (off by default; no client change) |
+| Optional PIN pairing | ✅ (menu toggle, off by default) | ✅ `--pin` (off by default; no client change) |
 | Inject into elevated/secure windows | n/a | ❌ blocked by Windows UIPI |
 
 > Windows helper is **LAN/localhost only and unauthenticated by default**, same as macOS. See
@@ -173,7 +173,10 @@ dotnet run --project .\WindowsHelper\src\MacPilot.Windows
 ## Security
 
 LAN-only and **unauthenticated by default** — anyone on the same Wi-Fi can connect.
-Keep it on a trusted home network and **do not expose port 8765 to the internet.**
+On a shared network (e.g. a lecture venue), turn on **PIN pairing** from the menu-bar app: a
+phone must enter the shown 6-digit PIN once before it can load the UI or send any input
+(the auth is a same-origin cookie, so the web client is unchanged).
+Keep it on a trusted network and **do not expose port 8765 to the internet.**
 
 ## Credits & Attribution
 

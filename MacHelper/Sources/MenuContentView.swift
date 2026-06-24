@@ -81,6 +81,31 @@ struct MenuContentView: View {
 
             Divider()
 
+            // PIN 페어링 (같은 Wi-Fi의 타인 접속 차단)
+            Toggle(isOn: Binding(get: { server.pairingEnabled },
+                                 set: { server.setPairing($0) })) {
+                Text("PIN 페어링").font(.callout)
+            }
+            if server.pairingEnabled {
+                Text("폰에서 접속 시 아래 PIN을 입력해야 합니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Text(server.pairingPin)
+                        .font(.system(.title2, design: .monospaced))
+                        .bold()
+                        .textSelection(.enabled)
+                    Spacer()
+                    Button("새 PIN") { server.regeneratePairingPin() }
+                }
+            } else {
+                Text("켜면 같은 Wi-Fi의 다른 사람이 함부로 접속·조작하지 못합니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Divider()
+
             Button("종료") {
                 NSApplication.shared.terminate(nil)
             }

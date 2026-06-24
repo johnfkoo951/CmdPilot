@@ -32,6 +32,7 @@ private enum AssetCache {
 ///       `Upgrade: websocket` 이면 101 핸드셰이크 후 텍스트 프레임을 명령으로 디코드.
 final class HTTPWebSocketConnection {
     private let connection: NWConnection
+    private let pairing: Pairing?
     private var buffer = [UInt8]()
     private var didUpgrade = false
     private var closing = false
@@ -41,9 +42,13 @@ final class HTTPWebSocketConnection {
     var onUpgrade: (() -> Void)?
     var onClose: (() -> Void)?
 
-    init(connection: NWConnection) {
+    init(connection: NWConnection, pairing: Pairing? = nil) {
         self.connection = connection
+        self.pairing = pairing
     }
+
+    /// 외부(서버)에서 강제 종료. 페어링을 켤 때 기존 미인증 연결을 끊는 데 사용.
+    func forceClose() { closeNow() }
 
     func start() {
         connection.stateUpdateHandler = { [weak self] state in
@@ -115,12 +120,66 @@ final class HTTPWebSocketConnection {
             headers[key] = value
         }
 
-        if headers["upgrade"]?.lowercased().contains("websocket") == true,
-           let key = headers["sec-websocket-key"] {
+        let isUpgrade = headers["upgrade"]?.lowercased().contains("websocket") == true
+
+        // 페어링 게이트(활성 시): 미인증이면 PIN 페이지, WS 는 거절. 비활성이면 그대로 통과.
+        if let pairing, pairing.enabled {
+            let clean = path.split(separator: "?").first.map(String.init) ?? path
+            if clean == "/pair" {
+                handlePair(path: path); return
+            }
+            let token = Pairing.readCookie(headers["cookie"], name: Pairing.cookieName)
+            if !pairing.isAuthorized(cookieToken: token) {
+                if isUpgrade { closeNow() } else { servePairPage(error: false) }
+                return
+            }
+        }
+
+        if isUpgrade, let key = headers["sec-websocket-key"] {
             performHandshake(key: key)
         } else {
             serveStatic(path: path)
         }
+    }
+
+    /// `GET /pair?pin=######` 처리: 맞으면 쿠키 발급 후 "/" 로 리다이렉트, 틀리면 에러 페이지.
+    private func handlePair(path: String) {
+        var pin: String?
+        if let query = path.split(separator: "?").dropFirst().first {
+            for field in query.split(separator: "&") {
+                let kv = field.split(separator: "=", maxSplits: 1)
+                if kv.count == 2, kv[0] == "pin" {
+                    pin = String(kv[1]).removingPercentEncoding ?? String(kv[1])
+                }
+            }
+        }
+        if let pairing, pairing.verifyPin(pin) {
+            let cookie = "\(Pairing.cookieName)=\(pairing.currentToken()); Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly"
+            let head = "HTTP/1.1 302 Found\r\nLocation: /\r\nSet-Cookie: \(cookie)\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            sendRaw(head)
+        } else {
+            servePairPage(error: true)
+        }
+    }
+
+    private func servePairPage(error: Bool) {
+        let body = Data(Pairing.pairPageHTML(error: error).utf8)
+        let head = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
+        var response = Data(head.utf8)
+        response.append(body)
+        idleWork?.cancel()
+        closing = true
+        connection.send(content: response, completion: .contentProcessed { [weak self] _ in
+            self?.connection.cancel()
+        })
+    }
+
+    private func sendRaw(_ string: String) {
+        idleWork?.cancel()
+        closing = true
+        connection.send(content: Data(string.utf8), completion: .contentProcessed { [weak self] _ in
+            self?.connection.cancel()
+        })
     }
 
     private func performHandshake(key: String) {
