@@ -4,8 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-MacPilot turns a Mac into a wireless trackpad / keyboard / Stream-Deck controlled from any phone's
-browser. A menu-bar Swift helper runs a hand-rolled HTTP + WebSocket server on the LAN (port 8765);
+**CmdSpace Pilot** — 구요한(johnfkoo951)'s branded fork of MacPilot (upstream: joonlab/MacPilot,
+MIT, keep the credit). It turns a Mac into a wireless trackpad / keyboard / Stream-Deck controlled
+from any phone's browser. A menu-bar Swift helper runs a hand-rolled HTTP + WebSocket server on the LAN (port 8765);
 the phone opens a URL, gets a vanilla HTML/JS web client, and its gestures/taps are streamed back as
 JSON commands that the Mac injects as real input via Quartz Event Services (`CGEvent`). No phone app,
 no Swift frameworks beyond the SDK, no JS dependencies. LAN-only, unauthenticated.
@@ -19,7 +20,14 @@ xcodegen generate            # regenerate MacPilot.xcodeproj from project.yml �
 open MacPilot.xcodeproj       # then build/run target MacPilotHelper in Xcode (📡 menu-bar icon appears)
 
 ./deploy.sh                  # Release build → ~/Applications/MacPilot Helper.app → restart launchd agent
+./script/macpilotctl.sh      # status|start|stop|restart|logs|open|url|install|sync-web|unsync-web
+./script/macpilotctl.sh sync-web   # web-only edits: rsync Web/ → App Support override, NO rebuild
 ```
+
+- **Web-only changes never need a rebuild**: the server serves files from
+  `~/Library/Application Support/MacPilot/web/` first (if present), then the bundle. `sync-web`
+  populates it; `unsync-web` reverts to bundle. This matters because a rebuild = new ad-hoc
+  signature = Accessibility grant reset.
 
 - There is no test suite and no linter. All commands must run from the repo root
   (`xcodegen generate` looks for `project.yml` in cwd).
@@ -53,8 +61,9 @@ Two halves talk over one WebSocket carrying flat JSON commands.
   `EventInjector`. Publishes `@Published` diagnostics (client count, command count, last command,
   accessibility state) consumed by the menu UI.
 - **`HTTPWebSocketConnection.swift`** — hand-rolled HTTP/1.1 + WebSocket (handshake, frame parse/build)
-  over a raw `NWConnection`. Serves the bundled web client on plain HTTP GET, upgrades on `Upgrade:`.
-  No networking framework beyond `Network`.
+  over a raw `NWConnection`. Serves the web client (App Support override dir first, then bundle),
+  upgrades on `Upgrade:`. The listener runs with **TCP_NODELAY** + `.responsiveData`
+  (`HelperServer.start`) — Nagle batching small move frames was the main perceived-latency source.
 - **`EventInjector.swift`** — the only place that synthesizes input. All events run on a single serial
   `DispatchQueue` so drag state (`isMouseDown`/`downButton`) and event ordering stay consistent.
   Dispatches on `command.t`: `move`/`down`/`up`/`click`/`scroll`/`key`/`text`/`macro`/`launch`/

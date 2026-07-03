@@ -7,6 +7,7 @@
   let ws = null, reconnectTimer = null;
   let latencyMs = null, pingTimer = null;
   const pendingPings = new Map();
+  let networkUIRefresh = null;   // 설정 모달이 열려 있을 때 자동 프리셋 변경을 반영
 
   function connect() {
     ws = new WebSocket(`ws://${location.host}/ws`);
@@ -33,6 +34,7 @@
             pendingPings.delete(m.id);
             latencyMs = Math.max(1, Math.round(performance.now() - sent));
             setStatus(true);
+            applyAutoTier();   // "자동" 프리셋이면 RTT에 맞춰 주사율/보정 조정
             const lat = document.getElementById("set-latency");
             if (lat) lat.textContent = latencyMs + "ms";
           }
@@ -83,17 +85,40 @@
     scrollSpeed: 1.0,
     scrollDir: 1,
     theme: "dark",
-    networkPreset: "balanced",
+    networkPreset: "auto",
     pointerHz: 60,
     pointerSmoothing: 0.16,
     resolutionScale: 1.0
   };
   const NETWORK_PRESETS = {
-    fast: { label: "빠른 Wi-Fi", pointerHz: 90, pointerSmoothing: 0.08, resolutionScale: 1.05 },
+    auto: { label: "자동" },   // RTT 기반 — 아래 AUTO_TIERS 로 실시간 조정
+    fast: { label: "빠른 Wi-Fi", pointerHz: 120, pointerSmoothing: 0.06, resolutionScale: 1.05 },
     balanced: { label: "균형", pointerHz: 60, pointerSmoothing: 0.16, resolutionScale: 1.0 },
     stable: { label: "불안정한 네트워크", pointerHz: 36, pointerSmoothing: 0.26, resolutionScale: 0.92 },
     manual: { label: "수동", pointerHz: 60, pointerSmoothing: 0.16, resolutionScale: 1.0 }
   };
+  // "자동": 3초마다 측정되는 RTT로 전송 주사율을 고른다. 좋은 Wi-Fi(<8ms)면 120Hz까지 올라감.
+  // 측정 편차로 프리셋이 널뛰지 않게 한 번에 한 단계씩만 이동.
+  const AUTO_TIERS = [
+    { maxRtt: 8, pointerHz: 120, pointerSmoothing: 0.05 },
+    { maxRtt: 25, pointerHz: 90, pointerSmoothing: 0.10 },
+    { maxRtt: 60, pointerHz: 60, pointerSmoothing: 0.16 },
+    { maxRtt: Infinity, pointerHz: 36, pointerSmoothing: 0.26 }
+  ];
+  let autoTierIdx = -1;
+  function applyAutoTier() {
+    if (settings.networkPreset !== "auto" || latencyMs == null) return;
+    let idx = AUTO_TIERS.findIndex((t) => latencyMs <= t.maxRtt);
+    if (idx < 0) idx = AUTO_TIERS.length - 1;
+    if (autoTierIdx === -1) autoTierIdx = idx;
+    else if (idx > autoTierIdx) autoTierIdx++;
+    else if (idx < autoTierIdx) autoTierIdx--;
+    const tier = AUTO_TIERS[autoTierIdx];
+    if (settings.pointerHz === tier.pointerHz && settings.pointerSmoothing === tier.pointerSmoothing) return;
+    settings.pointerHz = tier.pointerHz;
+    settings.pointerSmoothing = tier.pointerSmoothing;
+    if (networkUIRefresh) networkUIRefresh();
+  }
   let settings = loadSettings();
   function loadSettings() {
     try { const r = localStorage.getItem(SETTINGS_KEY); if (r) return Object.assign({}, SETTINGS_DEFAULTS, JSON.parse(r)); } catch (e) {}
@@ -119,8 +144,10 @@
   themeMQ.addEventListener("change", () => { if (settings.theme === "system") applyTheme(); });
   function applyNetworkPreset(name) {
     const preset = NETWORK_PRESETS[name];
-    if (!preset || name === "manual") return;
+    if (!preset) return;
     settings.networkPreset = name;
+    if (name === "manual") return;
+    if (name === "auto") { autoTierIdx = -1; applyAutoTier(); return; }
     settings.pointerHz = preset.pointerHz;
     settings.pointerSmoothing = preset.pointerSmoothing;
     settings.resolutionScale = preset.resolutionScale;
@@ -813,7 +840,7 @@
       '<div class="set-section">테마</div>' +
       '<div class="seg" id="set-theme"><button data-theme="system">시스템</button><button data-theme="light">라이트</button><button data-theme="dark">다크</button></div>' +
       '<div class="set-section">네트워크/주사율</div>' +
-      '<div class="seg net-presets" id="set-network"><button data-net="fast">빠른 Wi-Fi</button><button data-net="balanced">균형</button><button data-net="stable">불안정</button><button data-net="manual">수동</button></div>' +
+      '<div class="seg net-presets" id="set-network"><button data-net="auto">자동</button><button data-net="fast">빠른 Wi-Fi</button><button data-net="balanced">균형</button><button data-net="stable">불안정</button><button data-net="manual">수동</button></div>' +
       '<div class="latency-card"><span>현재 지연율</span><b id="set-latency">' + (latencyMs ? latencyMs + "ms" : "측정 중") + '</b></div>' +
       sliderHTML("hz", "전송 주사율", 24, 120, 1) +
       sliderHTML("smooth", "움직임 보정", 0, 0.45, 0.01) +
@@ -826,7 +853,7 @@
       '<div class="modal-actions"><button id="set-reset" class="danger">기본값</button><span style="flex:1"></span><button id="set-done" class="primary">완료</button></div>' +
       '<div class="about"><img class="logo-img about-logo" alt="CmdSpace"><div class="copyright">CmdSpace Pilot · fork of MacPilot</div></div>' +
       '</div>';
-    const close = () => { modalRoot.innerHTML = ""; };
+    const close = () => { modalRoot.innerHTML = ""; networkUIRefresh = null; };
     modalRoot.querySelector(".modal-bg").addEventListener("click", close);
     modalRoot.querySelector("#set-close").addEventListener("click", close);
     modalRoot.querySelector("#set-done").addEventListener("click", close);
@@ -875,6 +902,7 @@
       });
     });
     refreshNetworkButtons();
+    networkUIRefresh = () => { syncNetworkSliders(); refreshNetworkButtons(); };   // 자동 프리셋 조정 시 모달 갱신
 
     const dir = modalRoot.querySelector("#set-scrolldir");
     dir.checked = settings.scrollDir === -1;

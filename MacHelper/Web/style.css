@@ -8,9 +8,9 @@
   --text-dim: #a7afb9;
   --text-mute: #727b88;
   --border: #2d3440;
-  --accent: #63e6be;
-  --accent-press: #7aa2ff;
-  --accent-text: #07110f;
+  --accent: #E985A2;        /* CMDS Pink (다크 액센트) */
+  --accent-press: #d4728f;
+  --accent-text: #2b1219;
   --gold: #d6b76e;
   --silver: #9ba4b0;
   --macro-bg: #20251f;
@@ -28,8 +28,8 @@
   --text-dim: #4f5965;
   --text-mute: #77818d;
   --border: #dde4ec;
-  --accent: #087f68;
-  --accent-press: #1a65d8;
+  --accent: #134538;        /* CMDS Green (라이트 액센트) */
+  --accent-press: #0d332a;
   --accent-text: #ffffff;
   --gold: #8a6a21;
   --silver: #7b8490;

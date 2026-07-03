@@ -9,7 +9,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.2.0"
+    MARKETING_VERSION: "0.3.0"
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: ""   # ← Xcode > Signing 에서 본인 Apple 팀 선택 / set your own Apple Team here
@@ -23,6 +23,8 @@ targets:
       - MacHelper/Sources
       - path: MacHelper/Web      # index.html / app.js / style.css 를 번들 리소스로
         buildPhase: resources
+      - path: MacHelper/Resources   # AppIcon.icns (CMDS 라운드 로고)
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.joonlab.macpilot.helper
@@ -32,6 +34,7 @@ targets:
       path: MacHelper/Info.plist
       properties:
         CFBundleDisplayName: "MacPilot Helper"
+        CFBundleIconFile: AppIcon
         LSUIElement: true
         NSLocalNetworkUsageDescription: "아이폰과 같은 Wi-Fi에서 브라우저 연결을 받기 위해 로컬 네트워크를 사용합니다."
 

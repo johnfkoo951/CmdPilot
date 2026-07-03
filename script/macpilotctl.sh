@@ -97,8 +97,20 @@ case "${1:-status}" in
   install)
     "$ROOT_DIR/deploy.sh"
     ;;
+  sync-web)
+    # 웹 파일만 고쳤을 때: 재빌드(=ad-hoc 재서명 → 손쉬운 사용 권한 리셋) 없이 즉시 반영.
+    # 서버는 이 폴더에 파일이 있으면 번들 대신 여기서 서빙한다.
+    WEB_OVERRIDE="$HOME/Library/Application Support/MacPilot/web"
+    mkdir -p "$WEB_OVERRIDE"
+    rsync -a --delete "$ROOT_DIR/MacHelper/Web/" "$WEB_OVERRIDE/"
+    echo "동기화 완료 → $WEB_OVERRIDE (폰에서 새로고침하면 반영)"
+    ;;
+  unsync-web)
+    rm -rf "$HOME/Library/Application Support/MacPilot/web"
+    echo "오버라이드 해제 — 번들 웹 리소스로 복귀"
+    ;;
   *)
-    echo "usage: $0 {status|start|stop|restart|logs|open|url|install}" >&2
+    echo "usage: $0 {status|start|stop|restart|logs|open|url|install|sync-web|unsync-web}" >&2
     exit 2
     ;;
 esac

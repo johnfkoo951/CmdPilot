@@ -109,7 +109,18 @@ Builds a Release app into `~/Applications` and installs a **launchd LaunchAgent*
 ./script/macpilotctl.sh stop
 ./script/macpilotctl.sh start
 ./script/macpilotctl.sh restart
+./script/macpilotctl.sh sync-web   # 웹(HTML/JS/CSS)만 고쳤을 때 재빌드 없이 즉시 반영
 ```
+
+### 📱 iPhone: Add to Home Screen (전체화면 앱처럼)
+
+Safari로 접속한 뒤 **공유 → 홈 화면에 추가**. 홈 화면 아이콘(CMDS 로고)으로 열면
+주소창 없는 **전체화면 standalone 모드**로 실행됩니다 — 매번 URL 칠 필요 없이 원탭 접속.
+
+### 네트워크 자동 최적화
+
+설정(⚙)의 **네트워크/주사율 → 자동**(기본값)은 3초마다 측정되는 RTT에 따라
+전송 주사율(36–120Hz)과 움직임 보정을 실시간으로 조절합니다. 빠른/균형/불안정/수동 프리셋도 선택 가능.
 
 ## Gesture reference
 

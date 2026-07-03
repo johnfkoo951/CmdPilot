@@ -109,24 +109,43 @@ final class HTTPWebSocketConnection {
         parseFrames() // 버퍼에 남은 프레임 즉시 처리
     }
 
+    /// 개발용 웹 루트 오버라이드. 이 폴더에 같은 이름의 파일이 있으면 번들 대신 그걸 서빙한다.
+    /// → 웹(HTML/JS/CSS)만 고칠 땐 재빌드(=ad-hoc 재서명으로 손쉬운 사용 권한 리셋) 없이 반영.
+    ///   동기화: ./script/macpilotctl.sh sync-web
+    private static let webOverrideDir = FileManager.default
+        .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("MacPilot/web", isDirectory: true)
+
     private func serveStatic(path: String) {
         let clean = path.split(separator: "?").first.map(String.init) ?? path
-        let asset: (name: String, ext: String, mime: String)?
+        let asset: (file: String, mime: String)?
         switch clean {
-        case "/", "/index.html": asset = ("index", "html", "text/html; charset=utf-8")
-        case "/app.js":          asset = ("app", "js", "application/javascript; charset=utf-8")
-        case "/style.css":       asset = ("style", "css", "text/css; charset=utf-8")
-        case "/logo.png", "/favicon.ico", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png":
-                                 asset = ("logo", "png", "image/png")
-        case "/logo-mark.png":   asset = ("logo-mark", "png", "image/png")
-        case "/logo-mark-dark.png": asset = ("logo-mark-dark", "png", "image/png")
-        default:                 asset = nil
+        case "/", "/index.html":    asset = ("index.html", "text/html; charset=utf-8")
+        case "/app.js":             asset = ("app.js", "application/javascript; charset=utf-8")
+        case "/style.css":          asset = ("style.css", "text/css; charset=utf-8")
+        case "/manifest.webmanifest": asset = ("manifest.webmanifest", "application/manifest+json")
+        case "/logo.png", "/favicon.ico":
+                                    asset = ("logo.png", "image/png")
+        case "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png", "/icon-180.png":
+                                    asset = ("icon-180.png", "image/png")
+        case "/icon-192.png":       asset = ("icon-192.png", "image/png")
+        case "/icon-512.png":       asset = ("icon-512.png", "image/png")
+        case "/logo-mark.png":      asset = ("logo-mark.png", "image/png")
+        case "/logo-mark-dark.png": asset = ("logo-mark-dark.png", "image/png")
+        default:                    asset = nil
         }
 
-        guard let asset,
-              let url = Bundle.main.url(forResource: asset.name, withExtension: asset.ext),
-              let body = try? Data(contentsOf: url)
-        else { sendSimple(status: "404 Not Found", body: "Not Found"); return }
+        guard let asset else { sendSimple(status: "404 Not Found", body: "Not Found"); return }
+
+        let dot = asset.file.lastIndex(of: ".")!
+        let stem = String(asset.file[..<dot])
+        let ext = String(asset.file[asset.file.index(after: dot)...])
+
+        var body: Data? = try? Data(contentsOf: Self.webOverrideDir.appendingPathComponent(asset.file))
+        if body == nil, let url = Bundle.main.url(forResource: stem, withExtension: ext) {
+            body = try? Data(contentsOf: url)
+        }
+        guard let body else { sendSimple(status: "404 Not Found", body: "Not Found"); return }
 
         let head = "HTTP/1.1 200 OK\r\n"
             + "Content-Type: \(asset.mime)\r\n"

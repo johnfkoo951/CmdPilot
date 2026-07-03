@@ -1,6 +1,12 @@
 import CoreImage.CIFilterBuiltins
 import SwiftUI
 
+/// CMDSPACE 브랜드 컬러 (cmdspace.work 디자인 토큰)
+enum CMDSBrand {
+    static let green = Color(red: 0x13 / 255, green: 0x45 / 255, blue: 0x38 / 255)   // #134538
+    static let pink  = Color(red: 0xE9 / 255, green: 0x85 / 255, blue: 0xA2 / 255)   // #E985A2
+}
+
 struct MenuContentView: View {
     @ObservedObject var server: HelperServer
 
@@ -26,9 +32,18 @@ struct MenuContentView: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(.regularMaterial)
                     .frame(width: 38, height: 38)
-                Image(systemName: "dot.radiowaves.left.and.right")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(serverTint)
+                if let logo = NSImage(named: "logo") {
+                    // CMDS 라운드 로고 (번들 logo.png)
+                    Image(nsImage: logo)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 32, height: 32)
+                        .clipShape(Circle())
+                } else {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(serverTint)
+                }
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -167,10 +182,12 @@ struct MenuContentView: View {
                     server.promptAccessibility()
                     server.openAccessibilitySettings()
                 } label: {
-                    Label("설정", systemImage: "gearshape")
+                    Label("권한 열기", systemImage: "hand.raised.fill")
                 }
-                .labelStyle(.iconOnly)
-                .help("손쉬운 사용 설정 열기")
+                .buttonStyle(.borderedProminent)
+                .tint(CMDSBrand.pink)
+                .controlSize(.small)
+                .help("손쉬운 사용 설정 열기 — 재빌드(ad-hoc 서명) 후에는 다시 켜야 합니다")
             }
         }
         .panelStyle()
@@ -215,14 +232,26 @@ struct MenuContentView: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "slider.horizontal.3")
+        HStack(spacing: 6) {
+            Circle().fill(CMDSBrand.pink).frame(width: 6, height: 6)
+            Text("CMDSPACE")
+                .font(.caption2.weight(.bold))
                 .foregroundStyle(.secondary)
-            Text("성능/네트워크 프리셋은 폰 UI의 설정에서 조정")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Text("CmdSpace Pilot v\(appVersion) · fork of MacPilot(JoonLab)")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
             Spacer()
+            Image(systemName: "slider.horizontal.3")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            Text("성능 설정은 폰 ⚙")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
+    }
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-"
     }
 
     /// 문자열을 QR 코드 NSImage 로 변환
