@@ -90,7 +90,8 @@
     pointerSmoothing: 0.16,
     resolutionScale: 1.0,
     sheetPos: 0,        // 트랙패드 시트 위치 (0=풀, 1=닫힘, 중간=부분)
-    sheetOpenPos: 0     // 마지막으로 열어둔 높이
+    sheetOpenPos: 0,    // 마지막으로 열어둔 높이
+    layoutMode: "auto"  // 화면 모드: auto(폭 기준) | phone | tablet
   };
   const NETWORK_PRESETS = {
     auto: { label: "자동" },   // RTT 기반 — 아래 AUTO_TIERS 로 실시간 조정
@@ -171,6 +172,26 @@
   function setAppHeight() { document.documentElement.style.setProperty("--app-height", window.innerHeight + "px"); }
   setAppHeight();
   window.addEventListener("resize", setAppHeight);
+
+  // ───────── 화면 모드 (자동 / 폰 / 태블릿) ─────────
+  // 태블릿(갤럭시 탭 등)·와이드 화면이면 html.wide → 덱 4열, 패널 폭 제한, 페이지당 12버튼.
+  // 설정에서 강제 선택 가능 (자동은 화면 폭 640px 기준).
+  function isWide() {
+    const m = settings.layoutMode || "auto";
+    if (m === "tablet") return true;
+    if (m === "phone") return false;
+    return window.innerWidth >= 640;
+  }
+  function applyLayoutMode() { document.documentElement.classList.toggle("wide", isWide()); }
+  applyLayoutMode();
+  window.addEventListener("resize", () => {
+    const was = document.documentElement.classList.contains("wide");
+    applyLayoutMode();
+    if (was !== document.documentElement.classList.contains("wide")) renderDeck();
+  });
+
+  // 햅틱 피드백 (안드로이드 Chrome 지원, iOS는 무시됨)
+  function buzz() { try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {} }
 
   // ───────── 모션 전송 큐 ─────────
   // touchmove 이벤트를 그대로 모두 보내면 네트워크/브라우저 상태에 따라 커서가 덩어리져 보인다.
@@ -414,6 +435,7 @@
   // ═════════ 에이전트 탭 + 퀵바 (고정 단축 버튼) ═════════
   // phrase = 텍스트 입력 후 자동 return (서버 매크로로 순차 실행 보장)
   function runQuickAction(b) {
+    buzz();
     const act = b.dataset.act;
     if (act === "key") {
       const mods = (b.dataset.mods || "").split(",").filter(Boolean);
@@ -473,7 +495,7 @@
     ]};
   }
 
-  const PAGE_SIZE = 9;
+  function pageSize() { return document.documentElement.classList.contains("wide") ? 12 : 9; }
   const pagesEl = document.getElementById("deck-pages");
   const dotsEl = document.getElementById("page-dots");
   const tabsEl = document.getElementById("folder-tabs");
@@ -488,10 +510,11 @@
 
   // 음량 / 밝기
   document.querySelectorAll("#media-bar button").forEach((b) => {
-    b.addEventListener("click", () => send({ t: b.dataset.m, dir: b.dataset.d }));
+    b.addEventListener("click", () => { buzz(); send({ t: b.dataset.m, dir: b.dataset.d }); });
   });
 
   function runItem(item) {
+    buzz();
     if (item.type === "shortcut") send({ t: "key", keyCode: item.keyCode, mods: item.mods || [] });
     else if (item.type === "text") send({ t: "text", text: item.text || "" });
     else if (item.type === "launch") send({ t: "launch", target: item.target || "" });
@@ -556,7 +579,8 @@
     const cells = items.map((item, i) => renderCell(item, i));
     if (editMode) cells.push(renderAddCell());
     const pages = [];
-    for (let i = 0; i < cells.length; i += PAGE_SIZE) pages.push(cells.slice(i, i + PAGE_SIZE));
+    const per = pageSize();
+    for (let i = 0; i < cells.length; i += per) pages.push(cells.slice(i, i + per));
     if (pages.length === 0) pages.push([]);
     pages.forEach((pc) => {
       const page = document.createElement("div");
@@ -895,6 +919,8 @@
       '<div class="modal-head"><div class="modal-title">설정</div><button id="set-close" class="modal-x">✕</button></div>' +
       '<div class="set-section">테마</div>' +
       '<div class="seg" id="set-theme"><button data-theme="system">시스템</button><button data-theme="light">라이트</button><button data-theme="dark">다크</button></div>' +
+      '<div class="set-section">화면 모드</div>' +
+      '<div class="seg" id="set-layout"><button data-lay="auto">자동</button><button data-lay="phone">폰</button><button data-lay="tablet">태블릿</button></div>' +
       '<div class="set-section">네트워크/주사율</div>' +
       '<div class="seg net-presets" id="set-network"><button data-net="auto">자동</button><button data-net="fast">빠른 Wi-Fi</button><button data-net="balanced">균형</button><button data-net="stable">불안정</button><button data-net="manual">수동</button></div>' +
       '<div class="latency-card"><span>현재 지연율</span><b id="set-latency">' + (latencyMs ? latencyMs + "ms" : "측정 중") + '</b></div>' +
@@ -963,6 +989,15 @@
     const dir = modalRoot.querySelector("#set-scrolldir");
     dir.checked = settings.scrollDir === -1;
     dir.addEventListener("change", () => { settings.scrollDir = dir.checked ? -1 : 1; saveSettings(); });
+
+    modalRoot.querySelectorAll("#set-layout button").forEach((b) => {
+      b.classList.toggle("on", b.dataset.lay === (settings.layoutMode || "auto"));
+      b.addEventListener("click", () => {
+        settings.layoutMode = b.dataset.lay;
+        saveSettings(); applyLayoutMode(); renderDeck();
+        modalRoot.querySelectorAll("#set-layout button").forEach((x) => x.classList.toggle("on", x === b));
+      });
+    });
 
     modalRoot.querySelectorAll("#set-theme button").forEach((b) => {
       b.classList.toggle("on", b.dataset.theme === (settings.theme || "dark"));

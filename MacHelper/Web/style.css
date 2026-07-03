@@ -211,6 +211,14 @@ textarea.ed-input { min-height: 80px; resize: none; }
 .latency-card { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-dim); font-size: 13px; margin-bottom: 6px; }
 .latency-card b { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 14px; }
 
+/* ───────── 와이드(태블릿) 모드: html.wide — 설정 '화면 모드'에서 선택 (자동=폭 640px) ───────── */
+html.wide .panel { max-width: 840px; margin: 0 auto; }
+html.wide .deck-page { grid-template-columns: repeat(4, 1fr); }
+html.wide .agent-grid.g2 { grid-template-columns: repeat(3, 1fr); }
+html.wide #quickbar { padding: 8px 16px; justify-content: center; }
+html.wide #quickbar button { max-width: 140px; }
+html.wide #click-bar { width: 100%; max-width: 840px; margin: 0 auto; }
+
 /* About / 저작권 */
 .about { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 24px 0 6px; }
 .about-logo { height: 30px; display: block; opacity: .92; }
