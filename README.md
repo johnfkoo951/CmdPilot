@@ -117,6 +117,20 @@ Builds a Release app into `~/Applications` and installs a **launchd LaunchAgent*
 Safari로 접속한 뒤 **공유 → 홈 화면에 추가**. 홈 화면 아이콘(CMDS 로고)으로 열면
 주소창 없는 **전체화면 standalone 모드**로 실행됩니다 — 매번 URL 칠 필요 없이 원탭 접속.
 
+### 🌍 원격 접속 (Tailscale)
+
+같은 Wi-Fi가 아니어도 [Tailscale](https://tailscale.com) 테일넷에 묶인 기기끼리는 어디서나 접속됩니다.
+서버가 모든 인터페이스에 바인딩되어 있어 **추가 설정 없이** 테일스케일 주소로 열면 끝:
+
+```
+http://<mac-name>.<tailnet>.ts.net:8766     # MagicDNS — 영구 고정 주소
+```
+
+- 이 주소는 **어느 네트워크에서도 절대 바뀌지 않으므로** 홈 화면 PWA도 이걸로 설치하는 걸 권장 (LAN에서도 WireGuard 직결이라 속도 손해 거의 없음)
+- 안드로이드도 Tailscale 앱만 켜면 mDNS 없이 같은 주소로 접속 (IP 바뀜 문제 종결)
+- ⚠️ **Tailscale Funnel로 이 포트를 공개하지 말 것** — 서버가 무인증이므로 테일넷 안에서만
+- 맥이 깨어 있어야 함: 원격으로 자주 쓰면 시스템 설정 → 배터리 → 전원 어댑터에서 "디스플레이가 꺼져 있을 때 자동으로 잠자지 않게" 켜두기
+
 ### 네트워크 자동 최적화
 
 설정(⚙)의 **네트워크/주사율 → 자동**(기본값)은 3초마다 측정되는 RTT에 따라
