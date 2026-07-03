@@ -94,8 +94,12 @@ main { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 .kb-special .sp:active { background: var(--surface-3); }
 #kb-input { flex: 1; min-height: 110px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 14px; padding: 14px; font-size: 17px; line-height: 1.5; resize: none; -webkit-user-select: text; user-select: text; }
 #kb-input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
-.kb-foot { display: flex; align-items: center; justify-content: space-between; }
-#kb-clear { background: var(--surface-2); color: var(--text); border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; }
+.kb-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.kb-quick { display: flex; gap: 6px; flex: 1; }
+.kbq { padding: 11px 16px; background: var(--accent); color: var(--accent-text); border: none; border-radius: 10px; font-size: 14px; font-weight: 700; }
+.kbq.sm { background: var(--surface-2); color: var(--text); font-weight: 400; padding: 11px 12px; }
+.kbq:active { opacity: .75; }
+#kb-clear { background: var(--surface-2); color: var(--text); border: none; border-radius: 8px; padding: 11px 14px; font-size: 13px; flex: 0 0 auto; }
 
 /* 덱 */
 .media-bar { display: flex; gap: 6px; align-items: center; padding-top: 12px; }
@@ -160,13 +164,13 @@ main { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 .agent-note { font-size: 11px; color: var(--text-mute); text-align: center; margin-top: auto; padding: 12px 0 4px; line-height: 1.5; }
 
 /* 퀵바 (상시 노출 단축 버튼) */
-#quickbar { flex: 0 0 auto; display: flex; gap: 6px; padding: 8px 10px 6px; border-top: 1px solid var(--border); background: var(--bg); }
-#quickbar button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; background: var(--surface); color: var(--text-dim); border: 1px solid var(--border); border-radius: 12px; padding: 8px 0 6px; font-size: 10px; }
+#quickbar { flex: 0 0 auto; display: flex; gap: 6px; padding: 6px 10px 5px; border-top: 1px solid var(--border); background: var(--bg); }
+#quickbar button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; background: var(--surface); color: var(--text-dim); border: 1px solid var(--border); border-radius: 12px; padding: 7px 0 5px; font-size: 10px; }
 #quickbar button:active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 
-/* 탭바 */
-#tabbar { flex: 0 0 auto; display: flex; border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom); background: var(--bg); }
-#tabbar .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; background: none; border: none; color: var(--text-mute); font-size: 11px; padding: 8px 0 6px; }
+/* 탭바 — safe-area 패딩을 22px로 클램프 (standalone에서 홈 인디케이터가 라벨을 가리던 문제) */
+#tabbar { flex: 0 0 auto; display: flex; border-top: 1px solid var(--border); padding-bottom: min(env(safe-area-inset-bottom, 0px), 22px); background: var(--bg); }
+#tabbar .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: none; color: var(--text-mute); font-size: 11px; padding: 6px 0 5px; }
 #tabbar .tab .icn { width: 21px; height: 21px; }
 #tabbar .tab.active { color: var(--accent); }
 
@@ -222,6 +226,21 @@ textarea.ed-input { min-height: 80px; resize: none; }
 .net-presets button { font-size: 12px; }
 .latency-card { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-dim); font-size: 13px; margin-bottom: 6px; }
 .latency-card b { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 14px; }
+
+/* 제스처 할당 (설정) */
+.gesture-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0; }
+.gesture-row label { font-size: 13px; color: var(--text); flex: 0 0 auto; }
+.gesture-row select { flex: 1; max-width: 210px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+
+/* 캡처 메뉴 / 결과 */
+.cap-actions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.cap-actions button { display: flex; align-items: center; gap: 10px; padding: 14px 14px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 12px; font-size: 15px; text-align: left; }
+.cap-actions button:active { background: var(--accent); color: var(--accent-text); }
+.cap-actions button span { font-size: 11px; color: var(--text-dim); display: block; }
+.cap-actions button:active span { color: inherit; }
+.cap-result img { width: 100%; border-radius: 12px; border: 1px solid var(--border); }
+.cap-result textarea { width: 100%; min-height: 130px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 14px; -webkit-user-select: text; user-select: text; }
+.cap-note { font-size: 12px; color: var(--text-mute); text-align: center; margin: 8px 0 4px; }
 
 /* ───────── 와이드(태블릿) 모드: html.wide — 설정 '화면 모드'에서 선택 (자동=폭 640px) ───────── */
 html.wide .panel { max-width: 840px; margin: 0 auto; }

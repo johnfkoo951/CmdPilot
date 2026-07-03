@@ -25,6 +25,7 @@ final class HelperServer: ObservableObject {
     let launchAgentLabel = "com.joonlab.macpilot.helper"
 
     private var listener: NWListener?
+    private var listener80: NWListener?   // 짧은 주소용 :80 보조 리스너 (선택)
     private var connections: [ObjectIdentifier: HTTPWebSocketConnection] = [:]
     private var upgradedKeys: Set<ObjectIdentifier> = []
     private var accessibilityTimer: Timer?
@@ -116,6 +117,21 @@ final class HelperServer: ObservableObject {
         } catch {
             print("[HelperServer] 리스너 시작 실패(포트 \(port) 사용 중일 수 있음): \(error)")
         }
+
+        // 짧은 주소용 :80 보조 리스너 — macOS 는 비루트도 저포트 바인딩 가능.
+        // 커스텀 도메인(CNAME → 테일스케일/mDNS)과 조합하면 포트 없는 주소로 접속된다.
+        // 이미 다른 프로세스가 80을 쓰면 조용히 건너뛴다.
+        if let port80 = NWEndpoint.Port(rawValue: 80) {
+            let tcp = NWProtocolTCP.Options()
+            tcp.noDelay = true
+            let params = NWParameters(tls: nil, tcp: tcp)
+            params.serviceClass = .responsiveData
+            if let aux = try? NWListener(using: params, on: port80) {
+                aux.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
+                aux.start(queue: .global(qos: .userInitiated))
+                listener80 = aux
+            }
+        }
     }
 
     private func accept(_ connection: NWConnection) {
@@ -195,6 +211,22 @@ final class HelperServer: ObservableObject {
                 client?.sendText(json)
             }
             return
+        case "capture":
+            // 맥 화면 → 폰 (JPEG base64)
+            CaptureService.captureScreen { [weak client] json in
+                client?.sendText(json)
+            }
+            return
+        case "ocr":
+            // 폰 카메라 이미지(base64) → OCR → 맥 클립보드
+            CaptureService.ocrToClipboard(base64: command.text ?? "") { [weak client] json in
+                client?.sendText(json)
+            }
+            return
+        case "launch" where command.target == "macpilot://spotlight":
+            // 발표 스팟라이트 토글 (덱 launch 스키마를 그대로 쓰는 내부 액션)
+            SpotlightOverlay.shared.toggle()
+            return
         default:
             break
         }
@@ -229,6 +261,8 @@ final class HelperServer: ObservableObject {
     func stop() {
         listener?.cancel()
         listener = nil
+        listener80?.cancel()
+        listener80 = nil
         serverQueue.async { [weak self] in
             guard let self else { return }
             self.connections.values.forEach { $0.close() }

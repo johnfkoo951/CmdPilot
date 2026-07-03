@@ -35,6 +35,16 @@
             cmuxState = m;
             renderCmux();
           }
+        } else if (m.t === "capture") {
+          const capBox = document.getElementById("cap-result");
+          if (capBox) capBox.innerHTML = m.data
+            ? '<img src="data:image/jpeg;base64,' + m.data + '" alt="맥 화면"><div class="cap-note">이미지를 길게 눌러 저장·복사</div>'
+            : '<div class="cap-note">캡처 실패 — 맥의 화면 기록 권한을 확인하세요 (시스템 설정 → 개인정보 보호 및 보안 → 화면 기록)</div>';
+        } else if (m.t === "ocr") {
+          const ocrBox = document.getElementById("cap-result");
+          if (ocrBox) ocrBox.innerHTML = m.text
+            ? '<div class="cap-note">✓ 맥 클립보드에 복사됨</div><textarea readonly>' + String(m.text).replace(/</g, "&lt;") + '</textarea>'
+            : '<div class="cap-note">인식된 텍스트가 없습니다</div>';
         } else if (m.t === "pong") {
           const sent = pendingPings.get(m.id);
           if (sent) {
@@ -458,10 +468,75 @@
       ] });
     } else if (act === "launch") {
       send({ t: "launch", target: b.dataset.target || "" });
+    } else if (act === "capmenu") {
+      openCaptureMenu();
     }
   }
   document.querySelectorAll("#panel-agent .agent-btn, #quickbar button").forEach((b) => {
     b.addEventListener("click", () => runQuickAction(b));
+  });
+
+  // ═════════ 캡처 메뉴 (양방향) ═════════
+  // ① 맥에서 영역 캡처(⇧⌘4)  ② 맥 화면을 폰으로 가져오기  ③ 폰 카메라 → OCR → 맥 클립보드
+  function openCaptureMenu() {
+    modalRoot.innerHTML =
+      '<div class="modal-bg"></div><div class="modal-card">' +
+      '<div class="modal-head"><div class="modal-title">캡처</div><button id="cap-close" class="modal-x">✕</button></div>' +
+      '<div class="cap-actions">' +
+        '<button id="cap-region">✂️ 맥에서 영역 캡처<span>⇧⌘4 — 맥 화면에서 드래그로 영역 선택</span></button>' +
+        '<button id="cap-fetch">🖥 맥 화면 가져오기<span>지금 맥 화면을 폰으로 (길게 눌러 저장)</span></button>' +
+        '<button id="cap-ocr">📷 카메라 텍스트 스캔<span>촬영 → 문자인식(OCR) → 맥 클립보드로</span></button>' +
+      '</div>' +
+      '<div id="cap-result" class="cap-result"></div>' +
+      '</div>';
+    const close = () => { modalRoot.innerHTML = ""; };
+    modalRoot.querySelector(".modal-bg").addEventListener("click", close);
+    modalRoot.querySelector("#cap-close").addEventListener("click", close);
+    modalRoot.querySelector("#cap-region").addEventListener("click", () => {
+      buzz(); send({ t: "key", keyCode: 21, mods: ["command", "shift"] }); close();
+    });
+    modalRoot.querySelector("#cap-fetch").addEventListener("click", () => {
+      buzz();
+      document.getElementById("cap-result").innerHTML = '<div class="cap-note">맥 화면 가져오는 중…</div>';
+      send({ t: "capture" });
+    });
+    modalRoot.querySelector("#cap-ocr").addEventListener("click", () => {
+      buzz();
+      const inp = document.createElement("input");
+      inp.type = "file"; inp.accept = "image/*"; inp.capture = "environment";
+      inp.addEventListener("change", async () => {
+        const file = inp.files && inp.files[0];
+        if (!file) return;
+        const box = document.getElementById("cap-result");
+        if (box) box.innerHTML = '<div class="cap-note">텍스트 인식 중…</div>';
+        try {
+          const b64 = await imageFileToJpegBase64(file, 1600);
+          send({ t: "ocr", text: b64 });
+        } catch (e) {
+          if (box) box.innerHTML = '<div class="cap-note">이미지 처리 실패</div>';
+        }
+      });
+      inp.click();
+    });
+  }
+  /// 카메라 원본(수 MB)을 그대로 보내지 않도록 긴 변 maxDim 으로 축소 후 JPEG base64 로.
+  async function imageFileToJpegBase64(file, maxDim) {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bmp.width * scale);
+    canvas.height = Math.round(bmp.height * scale);
+    canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.82).split(",")[1];
+  }
+
+  // 키보드 탭: 타이핑 박스 하단 빠른 전송 버튼 (⏎ 크게 + esc/⌫/⇥)
+  document.querySelectorAll(".kb-quick .kbq").forEach((btn) => {
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      buzz();
+      send({ t: "key", keyCode: parseInt(btn.dataset.key, 10), mods: activeMods.slice() });
+    });
   });
 
   // ═════════ cmux 원격 (창 / 워크스페이스 / 탭 전환) ═════════
@@ -985,6 +1060,12 @@
       '<div class="seg" id="set-theme"><button data-theme="system">시스템</button><button data-theme="light">라이트</button><button data-theme="dark">다크</button></div>' +
       '<div class="set-section">화면 모드</div>' +
       '<div class="seg" id="set-layout"><button data-lay="auto">자동</button><button data-lay="phone">폰</button><button data-lay="tablet">태블릿</button></div>' +
+      '<div class="set-section">제스처 할당</div>' +
+      GESTURE_SLOTS.map(function (slot) {
+        return '<div class="gesture-row"><label>' + slot[1] + '</label><select data-gkey="' + slot[0] + '">' +
+          Object.keys(GESTURE_ACTIONS).map(function (a) { return '<option value="' + a + '">' + GESTURE_ACTIONS[a].label + '</option>'; }).join("") +
+          '</select></div>';
+      }).join("") +
       '<div class="set-section">네트워크/주사율</div>' +
       '<div class="seg net-presets" id="set-network"><button data-net="auto">자동</button><button data-net="fast">빠른 Wi-Fi</button><button data-net="balanced">균형</button><button data-net="stable">불안정</button><button data-net="manual">수동</button></div>' +
       '<div class="latency-card"><span>현재 지연율</span><b id="set-latency">' + (latencyMs ? latencyMs + "ms" : "측정 중") + '</b></div>' +
@@ -1054,6 +1135,11 @@
     dir.checked = settings.scrollDir === -1;
     dir.addEventListener("change", () => { settings.scrollDir = dir.checked ? -1 : 1; saveSettings(); });
 
+    modalRoot.querySelectorAll(".gesture-row select").forEach((sel) => {
+      sel.value = settings.gestures[sel.dataset.gkey] || "none";
+      sel.addEventListener("change", () => { settings.gestures[sel.dataset.gkey] = sel.value; saveSettings(); });
+    });
+
     modalRoot.querySelectorAll("#set-layout button").forEach((b) => {
       b.classList.toggle("on", b.dataset.lay === (settings.layoutMode || "auto"));
       b.addEventListener("click", () => {
@@ -1109,13 +1195,50 @@
     };
     momentumRAF = requestAnimationFrame(step);
   }
+  // ───────── 제스처 → 기능 할당 ─────────
+  // 3·4손가락 스와이프(각 4방향)에 원하는 동작을 설정(⚙ → 제스처 할당)으로 배정한다.
+  // 사파리는 동시 터치 5개까지 추적하므로 손가락 수는 touches.length 로 판별.
+  const GESTURE_ACTIONS = {
+    none: { label: "없음", run: () => {} },
+    back: { label: "뒤로 (⌘←)", run: () => send({ t: "key", keyCode: 123, mods: ["command"] }) },
+    forward: { label: "앞으로 (⌘→)", run: () => send({ t: "key", keyCode: 124, mods: ["command"] }) },
+    mission: { label: "미션 컨트롤", run: () => send({ t: "launch", target: "/System/Applications/Mission Control.app" }) },
+    expose: { label: "앱 엑스포제 (⌃↓)", run: () => send({ t: "key", keyCode: 125, mods: ["control"] }) },
+    appswitch: { label: "앱 전환 (⌘⇥)", run: () => send({ t: "key", keyCode: 48, mods: ["command"] }) },
+    tabPrev: { label: "이전 탭 (⇧⌘[)", run: () => send({ t: "key", keyCode: 33, mods: ["command", "shift"] }) },
+    tabNext: { label: "다음 탭 (⇧⌘])", run: () => send({ t: "key", keyCode: 30, mods: ["command", "shift"] }) },
+    spotlightSearch: { label: "스팟라이트 검색 (⌘Space)", run: () => send({ t: "key", keyCode: 49, mods: ["command"] }) },
+    raycast: { label: "Raycast (⇧Space)", run: () => send({ t: "key", keyCode: 49, mods: ["shift"] }) },
+    whisper: { label: "superwhisper (⌥Space)", run: () => send({ t: "key", keyCode: 49, mods: ["option"] }) },
+    presSpot: { label: "발표 스팟라이트 토글", run: () => send({ t: "launch", target: "macpilot://spotlight" }) },
+    volUp: { label: "음량 올리기", run: () => send({ t: "volume", dir: "up" }) },
+    volDown: { label: "음량 내리기", run: () => send({ t: "volume", dir: "down" }) },
+    mute: { label: "음소거", run: () => send({ t: "volume", dir: "mute" }) },
+    capture: { label: "영역 캡처 (⇧⌘4)", run: () => send({ t: "key", keyCode: 21, mods: ["command", "shift"] }) }
+  };
+  const GESTURE_SLOTS = [
+    ["s3left", "3손가락 ←"], ["s3right", "3손가락 →"], ["s3up", "3손가락 ↑"], ["s3down", "3손가락 ↓"],
+    ["s4left", "4손가락 ←"], ["s4right", "4손가락 →"], ["s4up", "4손가락 ↑"], ["s4down", "4손가락 ↓"]
+  ];
+  const DEFAULT_GESTURES = {
+    s3left: "back", s3right: "forward", s3up: "mission", s3down: "expose",
+    s4left: "tabPrev", s4right: "tabNext", s4up: "appswitch", s4down: "presSpot"
+  };
+  if (!settings.gestures) settings.gestures = {};
+  settings.gestures = Object.assign({}, DEFAULT_GESTURES, settings.gestures);
+
+  let gFingers = 3;   // 이번 제스처의 손가락 수 (3 또는 4+)
   function fireSwipeIfNeeded() {
     if (g3fired || !g3start || !g3last) return;
     const dx = g3last.x - g3start.x, dy = g3last.y - g3start.y;
     if (Math.hypot(dx, dy) < SWIPE3_THRESH) return;
     const dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
     flushMotion(true);
-    send({ t: "gesture", dir }); g3fired = true;
+    const key = "s" + Math.min(gFingers, 4) + dir;
+    const action = GESTURE_ACTIONS[settings.gestures[key]] || GESTURE_ACTIONS.none;
+    buzz();
+    action.run();
+    g3fired = true;
   }
 
   pad.addEventListener("touchstart", (e) => {
@@ -1128,7 +1251,10 @@
       armedForDrag = !buttonHeld() && (now() - lastTapEnd) < DOUBLE_MS;
     } else { maxTouches = Math.max(maxTouches, n); armedForDrag = false; }
     if (n === 2) { twoMode = null; d0 = dist2(e.touches); c0 = centroid(e.touches); lastZoomDist = d0; }
-    if (n >= 3 && !threeMode) { threeMode = true; g3start = centroid(e.touches); g3last = g3start; }
+    if (n >= 3) {
+      if (!threeMode) { threeMode = true; gFingers = n; g3start = centroid(e.touches); g3last = g3start; }
+      else { gFingers = Math.max(gFingers, n); }   // 3→4손가락 추가 감지
+    }
     lastCentroid = centroid(e.touches);
   }, { passive: false });
 

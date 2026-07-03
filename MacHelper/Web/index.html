@@ -62,7 +62,12 @@
       <textarea id="kb-input" placeholder="여기에 입력하면 맥에 타이핑됩니다"
                 autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
       <div class="kb-foot">
-        <span></span>
+        <div class="kb-quick">
+          <button class="kbq" data-key="36">⏎ 보내기</button>
+          <button class="kbq sm" data-key="53">esc</button>
+          <button class="kbq sm" data-key="51">⌫</button>
+          <button class="kbq sm" data-key="48">⇥</button>
+        </div>
         <button id="kb-clear">지우기</button>
       </div>
     </section>
@@ -139,7 +144,7 @@
     <button data-act="key" data-key="49" data-mods="shift" aria-label="Raycast"><svg class="icn"><use href="#i-bolt"/></svg><span>Raycast</span></button>
     <button data-act="key" data-key="48" data-mods="command" aria-label="앱 전환"><svg class="icn"><use href="#i-appswitch"/></svg><span>앱 전환</span></button>
     <button data-act="launch" data-target="/System/Applications/Mission Control.app" aria-label="미션 컨트롤"><svg class="icn"><use href="#i-mission"/></svg><span>미션</span></button>
-    <button data-act="key" data-key="21" data-mods="command,shift" aria-label="영역 캡처"><svg class="icn"><use href="#i-camera"/></svg><span>캡처</span></button>
+    <button data-act="capmenu" aria-label="캡처 메뉴"><svg class="icn"><use href="#i-camera"/></svg><span>캡처</span></button>
   </div>
 
   <nav id="tabbar">
