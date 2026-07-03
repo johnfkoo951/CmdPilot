@@ -48,7 +48,11 @@ html, body {
   overflow: hidden; overscroll-behavior: none; touch-action: manipulation;
   -webkit-text-size-adjust: 100%; position: fixed; width: 100%;
 }
-body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
+/* 높이: JS가 innerHeight 를 --app-height 로 공급 (사파리 주소창 접힘·웹앱 standalone 모두 정확) */
+body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; height: var(--app-height, 100dvh); padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
+
+/* SF Symbols 풍 인라인 아이콘 */
+.icn { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: block; }
 
 /* 헤더 */
 #bar { display: flex; align-items: center; gap: 8px; padding: 9px 16px; font-size: 14px; flex: 0 0 auto; border-bottom: 1px solid var(--border); }
@@ -59,6 +63,7 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; pad
 #status { color: var(--text-dim); font-size: 13px; }
 .gear { margin-left: auto; background: none; border: none; color: var(--text-dim); font-size: 20px; padding: 4px 6px; }
 .gear:active { color: var(--accent); }
+.gear .icn { width: 21px; height: 21px; }
 
 main { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 .panel { position: absolute; inset: 0; display: none; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
@@ -94,8 +99,9 @@ main { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 
 /* 덱 */
 .media-bar { display: flex; gap: 6px; align-items: center; padding-top: 12px; }
-.media-bar button { flex: 1; padding: 11px 0; background: var(--surface-2); color: var(--text); border: none; border-radius: 10px; font-size: 18px; }
-.media-bar button:active { background: var(--accent); }
+.media-bar button { flex: 1; padding: 10px 0; background: var(--surface-2); color: var(--text); border: none; border-radius: 10px; font-size: 18px; }
+.media-bar button:active { background: var(--accent); color: var(--accent-text); }
+.media-bar .icn { margin: 0 auto; width: 21px; height: 21px; }
 .media-div { width: 1px; height: 22px; background: var(--border); margin: 0 4px; flex: 0 0 auto; }
 .deck-head { display: flex; align-items: center; gap: 8px; padding-top: 10px; }
 .folder-tabs { flex: 1; display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -126,10 +132,30 @@ main { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 .page-dots .pd { width: 7px; height: 7px; border-radius: 50%; background: var(--surface-3); }
 .page-dots .pd.on { background: var(--accent); }
 
+/* 에이전트 (cmux · Claude Code 원격) */
+#panel-agent { overflow-y: auto; }
+.agent-sec { font-size: 12px; color: var(--text-mute); margin: 14px 2px 0; }
+.agent-grid { display: grid; gap: 8px; }
+.agent-grid.g3 { grid-template-columns: repeat(3, 1fr); }
+.agent-grid.g5 { grid-template-columns: repeat(5, 1fr); }
+.agent-grid.g2 { grid-template-columns: repeat(2, 1fr); }
+.agent-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 12px 6px; font-size: 15px; }
+.agent-btn:active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.agent-btn span { font-size: 10px; color: var(--text-dim); }
+.agent-btn:active span { color: inherit; }
+.agent-btn.big { min-height: 62px; font-size: 19px; }
+.agent-btn.ph { font-size: 13px; padding: 13px 8px; }
+.agent-note { font-size: 11px; color: var(--text-mute); text-align: center; margin-top: auto; padding: 12px 0 4px; line-height: 1.5; }
+
+/* 퀵바 (상시 노출 단축 버튼) */
+#quickbar { flex: 0 0 auto; display: flex; gap: 6px; padding: 8px 10px 6px; border-top: 1px solid var(--border); background: var(--bg); }
+#quickbar button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; background: var(--surface); color: var(--text-dim); border: 1px solid var(--border); border-radius: 12px; padding: 8px 0 6px; font-size: 10px; }
+#quickbar button:active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
 /* 탭바 */
 #tabbar { flex: 0 0 auto; display: flex; border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom); background: var(--bg); }
-#tabbar .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: none; color: var(--text-mute); font-size: 11px; padding: 8px 0 6px; }
-#tabbar .tab span { font-size: 19px; line-height: 1; }
+#tabbar .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; background: none; border: none; color: var(--text-mute); font-size: 11px; padding: 8px 0 6px; }
+#tabbar .tab .icn { width: 21px; height: 21px; }
 #tabbar .tab.active { color: var(--accent); }
 
 /* 모달 */

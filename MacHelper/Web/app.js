@@ -88,7 +88,9 @@
     networkPreset: "auto",
     pointerHz: 60,
     pointerSmoothing: 0.16,
-    resolutionScale: 1.0
+    resolutionScale: 1.0,
+    sheetPos: 0,        // 트랙패드 시트 위치 (0=풀, 1=닫힘, 중간=부분)
+    sheetOpenPos: 0     // 마지막으로 열어둔 높이
   };
   const NETWORK_PRESETS = {
     auto: { label: "자동" },   // RTT 기반 — 아래 AUTO_TIERS 로 실시간 조정
@@ -100,10 +102,10 @@
   // "자동": 3초마다 측정되는 RTT로 전송 주사율을 고른다. 좋은 Wi-Fi(<8ms)면 120Hz까지 올라감.
   // 측정 편차로 프리셋이 널뛰지 않게 한 번에 한 단계씩만 이동.
   const AUTO_TIERS = [
-    { maxRtt: 8, pointerHz: 120, pointerSmoothing: 0.05 },
-    { maxRtt: 25, pointerHz: 90, pointerSmoothing: 0.10 },
-    { maxRtt: 60, pointerHz: 60, pointerSmoothing: 0.16 },
-    { maxRtt: Infinity, pointerHz: 36, pointerSmoothing: 0.26 }
+    { maxRtt: 12, pointerHz: 120, pointerSmoothing: 0.04 },
+    { maxRtt: 30, pointerHz: 90, pointerSmoothing: 0.08 },
+    { maxRtt: 60, pointerHz: 60, pointerSmoothing: 0.14 },
+    { maxRtt: Infinity, pointerHz: 36, pointerSmoothing: 0.24 }
   ];
   let autoTierIdx = -1;
   function applyAutoTier() {
@@ -153,7 +155,22 @@
     settings.resolutionScale = preset.resolutionScale;
   }
   if (settings.networkPreset && settings.networkPreset !== "manual") applyNetworkPreset(settings.networkPreset);
+  // 예전 기본값(balanced)으로 저장된 기기를 자동 프리셋으로 1회 이관
+  if (!settings._autoMigrated) {
+    settings._autoMigrated = true;
+    if (settings.networkPreset === "balanced") { settings.networkPreset = "auto"; }
+    saveSettings();
+  }
   applyTheme();
+
+  // ───────── 실제 가시 높이 추적 ─────────
+  // 사파리(주소창 접힘/펼침)와 홈 화면 웹앱(standalone)의 가시 영역이 달라
+  // 100dvh 만으론 아래가 비거나 잘린다 → JS로 innerHeight 를 CSS 변수로 공급.
+  if (navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches)
+    document.documentElement.classList.add("standalone");
+  function setAppHeight() { document.documentElement.style.setProperty("--app-height", window.innerHeight + "px"); }
+  setAppHeight();
+  window.addEventListener("resize", setAppHeight);
 
   // ───────── 모션 전송 큐 ─────────
   // touchmove 이벤트를 그대로 모두 보내면 네트워크/브라우저 상태에 따라 커서가 덩어리져 보인다.
@@ -165,10 +182,11 @@
   function motionScale() { return clampNum(settings.resolutionScale || 1, 0.5, 2); }
   function scheduleMotion() {
     if (motionRAF || motionTimer) return;
-    const wait = Math.max(0, motionInterval() - (performance.now() - lastMotionFlush));
-    const arm = () => { motionRAF = requestAnimationFrame(flushMotionFrame); };
-    if (wait > 4) motionTimer = setTimeout(() => { motionTimer = null; arm(); }, wait);
-    else arm();
+    const wait = motionInterval() - (performance.now() - lastMotionFlush);
+    // 리딩엣지: 전송 주기가 이미 지났으면 대기 없이 즉시 전송.
+    // (기존 rAF 대기는 프레임당 최대 8~16ms 지연을 추가로 얹었다)
+    if (wait <= 1) { flushMotionFrame(performance.now()); return; }
+    motionTimer = setTimeout(() => { motionTimer = null; flushMotionFrame(performance.now()); }, wait);
   }
   function queueMove(dx, dy) {
     const scale = motionScale();
@@ -266,27 +284,41 @@
     });
   });
 
-  // ═════════ 트랙패드 시트 (엣지 핸들로 소환/닫기) ═════════
+  // ═════════ 트랙패드 시트 (핸들 드래그 → 원하는 높이 디텐트에 스냅) ═════════
+  // 0 = 풀화면, 0.45·0.7 = 부분(위에 덱/키보드 레이어가 함께 보임), 1 = 닫힘(핸들만).
+  // 마지막 높이는 기기별로 기억된다 (settings.sheetPos / sheetOpenPos).
   const mainEl = document.querySelector("main");
   const sheetEl = document.getElementById("tp-sheet");
   const sheetHandle = document.getElementById("tp-handle");
   const HANDLE_H = 46;
-  let sheetOpen = true, sheetCurOff = 0, sheetDrag = null;
+  const SHEET_DETENTS = [0, 0.45, 0.7, 1];
+  let sheetPos = clampNum(settings.sheetPos != null ? settings.sheetPos : 0, 0, 1);
+  let sheetCurOff = 0, sheetDrag = null;
 
+  function sheetOpenNow() { return sheetPos < 1; }
   function closedOffset() { return Math.max(mainEl.clientHeight - HANDLE_H, 0); }
   function applySheet(off, animate) {
     sheetCurOff = off;
     sheetEl.style.transition = animate ? "transform .25s cubic-bezier(.2,.8,.2,1)" : "none";
     sheetEl.style.transform = "translateY(" + off + "px)";
   }
-  function setSheet(open) {
-    sheetOpen = open;
-    applySheet(open ? 0 : closedOffset(), true);
-    sheetHandle.classList.toggle("open", open);
-    if (open) kb.blur();
+  function nearestDetent(frac) {
+    let best = SHEET_DETENTS[0], dist = Infinity;
+    for (const d of SHEET_DETENTS) { const dd = Math.abs(frac - d); if (dd < dist) { dist = dd; best = d; } }
+    return best;
   }
+  function setSheetPos(pos, animate) {
+    sheetPos = pos;
+    applySheet(pos * closedOffset(), animate !== false);
+    sheetHandle.classList.toggle("open", pos < 1);
+    if (pos < 1) { kb.blur(); settings.sheetOpenPos = pos; }   // 마지막 열림 높이 기억
+    settings.sheetPos = pos;
+    saveSettings();
+  }
+  function setSheet(open) { setSheetPos(open ? (settings.sheetOpenPos != null ? settings.sheetOpenPos : 0) : 1); }
+  function sheetReflow() { applySheet(sheetPos * closedOffset(), false); }
   sheetHandle.addEventListener("touchstart", (e) => {
-    sheetDrag = { y: e.touches[0].clientY, startOff: sheetOpen ? 0 : closedOffset(), moved: false };
+    sheetDrag = { y: e.touches[0].clientY, startOff: sheetPos * closedOffset(), moved: false };
   }, { passive: true });
   sheetHandle.addEventListener("touchmove", (e) => {
     if (!sheetDrag) return;
@@ -297,11 +329,12 @@
   }, { passive: false });
   sheetHandle.addEventListener("touchend", () => {
     if (!sheetDrag) return;
-    if (!sheetDrag.moved) setSheet(!sheetOpen);            // 탭 = 토글
-    else setSheet(sheetCurOff < closedOffset() / 2);       // 드래그 = 위치로 스냅
+    if (!sheetDrag.moved) setSheet(!sheetOpenNow());       // 탭 = 열기/닫기 토글
+    else setSheetPos(nearestDetent(sheetCurOff / Math.max(closedOffset(), 1)));   // 드래그 = 가까운 디텐트로
     sheetDrag = null;
   });
-  window.addEventListener("resize", () => applySheet(sheetOpen ? 0 : closedOffset(), false));
+  window.addEventListener("resize", sheetReflow);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", () => { setAppHeight(); sheetReflow(); });
 
   // 좌/우 클릭 버튼 — 누르고 있으면 마우스 버튼이 '눌린 채' 유지.
   // → 좌클릭 누른 채 다른 손가락으로 트랙패드 드래그하면 진짜 드래그-선택.
@@ -376,6 +409,29 @@
       e.preventDefault();
       send({ t: "key", keyCode: parseInt(btn.dataset.key, 10), mods: activeMods.slice() });
     });
+  });
+
+  // ═════════ 에이전트 탭 + 퀵바 (고정 단축 버튼) ═════════
+  // phrase = 텍스트 입력 후 자동 return (서버 매크로로 순차 실행 보장)
+  function runQuickAction(b) {
+    const act = b.dataset.act;
+    if (act === "key") {
+      const mods = (b.dataset.mods || "").split(",").filter(Boolean);
+      send({ t: "key", keyCode: parseInt(b.dataset.key, 10), mods });
+    } else if (act === "ctrlc") {
+      send({ t: "key", keyCode: 8, mods: ["control"] });
+    } else if (act === "phrase") {
+      send({ t: "macro", steps: [
+        { type: "text", text: b.dataset.text || "" },
+        { type: "delay", ms: 120 },
+        { type: "key", keyCode: 36, mods: [] }
+      ] });
+    } else if (act === "launch") {
+      send({ t: "launch", target: b.dataset.target || "" });
+    }
+  }
+  document.querySelectorAll("#panel-agent .agent-btn, #quickbar button").forEach((b) => {
+    b.addEventListener("click", () => runQuickAction(b));
   });
 
   // ═════════ 덱 ═════════
@@ -1046,7 +1102,6 @@
   }, { passive: false });
 
   renderDeck();
-  applySheet(0, false);                 // 시작 시 트랙패드 시트 열림
-  sheetHandle.classList.add("open");
+  setSheetPos(sheetPos, false);         // 시작 시 기억된 높이로 (기본: 풀화면)
   connect();
 })();

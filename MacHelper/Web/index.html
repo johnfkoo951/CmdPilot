@@ -14,11 +14,29 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <!-- SF Symbols 풍 인라인 아이콘 스프라이트 (외부 의존성 없음) -->
+  <svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="15" rx="3"/><path d="M7 9.5l3 2.5-3 2.5M13 15h4"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3L5.5 13.5H11L9.5 21 17.5 10.5H12L13 3z"/></symbol>
+    <symbol id="i-appswitch" viewBox="0 0 24 24"><rect x="3.5" y="7.5" width="12" height="12" rx="2.5"/><path d="M8.5 4h9a3 3 0 0 1 3 3v9"/></symbol>
+    <symbol id="i-mission" viewBox="0 0 24 24"><rect x="2.5" y="6" width="5.4" height="12" rx="1.5"/><rect x="9.3" y="4" width="5.4" height="16" rx="1.5"/><rect x="16.1" y="6" width="5.4" height="12" rx="1.5"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M8.2 6l1.2-2h5.2L15.8 6h3.7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.7z"/><circle cx="12" cy="12.5" r="3.5"/></symbol>
+    <symbol id="i-vol-down" viewBox="0 0 24 24"><path d="M4.5 9.5v5H8L12.5 19V5L8 9.5H4.5z"/><path d="M15.5 9.2a4.6 4.6 0 0 1 0 5.6"/></symbol>
+    <symbol id="i-vol-up" viewBox="0 0 24 24"><path d="M3.5 9.5v5H7L11.5 19V5L7 9.5H3.5z"/><path d="M14.5 9.2a4.6 4.6 0 0 1 0 5.6M17.2 6.6a8.4 8.4 0 0 1 0 10.8"/></symbol>
+    <symbol id="i-vol-mute" viewBox="0 0 24 24"><path d="M4.5 9.5v5H8L12.5 19V5L8 9.5H4.5z"/><path d="M16 9.7l4.6 4.6M20.6 9.7L16 14.3"/></symbol>
+    <symbol id="i-sun-min" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 5v1.6M12 17.4V19M5 12h1.6M17.4 12H19"/></symbol>
+    <symbol id="i-sun-max" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.8v2M12 19.2v2M2.8 12h2M19.2 12h2M5.5 5.5l1.4 1.4M17.1 17.1l1.4 1.4M18.5 5.5l-1.4 1.4M6.9 17.1l-1.4 1.4"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9.6M18.4 7H20M4 12h3.6M12.4 12H20M4 17h12.1M20.4 17H20"/><circle cx="16" cy="7" r="2.1"/><circle cx="10" cy="12" r="2.1"/><circle cx="18.2" cy="17" r="2.1"/></symbol>
+  </svg>
+
   <header id="bar">
     <span class="logo-wrap"><img class="logo-img" src="/logo-mark-dark.png" alt="CmdSpace"></span>
     <span id="dot" class="dot"></span>
     <span id="status">연결 중…</span>
-    <button id="settings-btn" class="gear" aria-label="설정">⚙</button>
+    <button id="settings-btn" class="gear" aria-label="설정"><svg class="icn"><use href="#i-sliders"/></svg></button>
   </header>
 
   <main>
@@ -49,15 +67,47 @@
       </div>
     </section>
 
+    <!-- 에이전트 (cmux · Claude Code 원격 조종) -->
+    <section id="panel-agent" class="panel">
+      <div class="agent-sec">제어</div>
+      <div class="agent-grid g3">
+        <button class="agent-btn big" data-act="key" data-key="36">⏎<span>입력 · 승인</span></button>
+        <button class="agent-btn big" data-act="key" data-key="53">esc<span>중단</span></button>
+        <button class="agent-btn big" data-act="ctrlc">⌃C<span>강제 중단</span></button>
+      </div>
+      <div class="agent-grid g5">
+        <button class="agent-btn" data-act="key" data-key="126">↑</button>
+        <button class="agent-btn" data-act="key" data-key="125">↓</button>
+        <button class="agent-btn" data-act="key" data-key="48">⇥</button>
+        <button class="agent-btn" data-act="phrase" data-text="y">y ⏎</button>
+        <button class="agent-btn" data-act="phrase" data-text="n">n ⏎</button>
+      </div>
+      <div class="agent-sec">빠른 지시 (입력 후 자동 ⏎)</div>
+      <div class="agent-grid g2">
+        <button class="agent-btn ph" data-act="phrase" data-text="계속해줘">계속해줘</button>
+        <button class="agent-btn ph" data-act="phrase" data-text="지금까지 진행상황 요약해줘">진행상황 요약</button>
+        <button class="agent-btn ph" data-act="phrase" data-text="/compact">/compact</button>
+        <button class="agent-btn ph" data-act="phrase" data-text="/clear">/clear</button>
+        <button class="agent-btn ph" data-act="phrase" data-text="테스트 돌리고 결과 알려줘">테스트 실행</button>
+        <button class="agent-btn ph" data-act="phrase" data-text="변경사항 커밋해줘">커밋해줘</button>
+      </div>
+      <div class="agent-sec">앱</div>
+      <div class="agent-grid g2">
+        <button class="agent-btn" data-act="launch" data-target="/Applications/cmux.app">❯ cmux 열기</button>
+        <button class="agent-btn" data-act="launch" data-target="/Applications/Codex.app">◆ Codex 열기</button>
+      </div>
+      <div class="agent-note">문구는 맥에서 포커스된 창에 타이핑됩니다 — cmux/터미널을 앞에 두고 쓰세요</div>
+    </section>
+
     <!-- 덱 -->
     <section id="panel-deck" class="panel active">
       <div class="media-bar" id="media-bar">
-        <button data-m="volume" data-d="down" aria-label="음량 내리기">🔉</button>
-        <button data-m="volume" data-d="up" aria-label="음량 올리기">🔊</button>
-        <button data-m="volume" data-d="mute" aria-label="음소거">🔇</button>
+        <button data-m="volume" data-d="down" aria-label="음량 내리기"><svg class="icn"><use href="#i-vol-down"/></svg></button>
+        <button data-m="volume" data-d="up" aria-label="음량 올리기"><svg class="icn"><use href="#i-vol-up"/></svg></button>
+        <button data-m="volume" data-d="mute" aria-label="음소거"><svg class="icn"><use href="#i-vol-mute"/></svg></button>
         <span class="media-div"></span>
-        <button data-m="brightness" data-d="down" aria-label="밝기 내리기">🔅</button>
-        <button data-m="brightness" data-d="up" aria-label="밝기 올리기">🔆</button>
+        <button data-m="brightness" data-d="down" aria-label="밝기 내리기"><svg class="icn"><use href="#i-sun-min"/></svg></button>
+        <button data-m="brightness" data-d="up" aria-label="밝기 올리기"><svg class="icn"><use href="#i-sun-max"/></svg></button>
       </div>
       <div class="deck-head">
         <div id="folder-tabs" class="folder-tabs"></div>
@@ -68,11 +118,11 @@
       <div id="page-dots" class="page-dots"></div>
     </section>
 
-    <!-- 트랙패드 시트 (어디서나 핸들로 끌어올려 소환) -->
+    <!-- 트랙패드 시트 (핸들 드래그로 높이 조절: 풀 · 부분 · 닫힘) -->
     <div id="tp-sheet">
       <div id="tp-handle"><span class="grab"></span><span class="lbl">트랙패드</span></div>
       <div id="trackpad">
-        <div id="hint">한 손가락: 이동 · 탭: 좌클릭 · 두 손가락: 스크롤·핀치 · 세 손가락: 데스크탑·미션컨트롤</div>
+        <div id="hint">한 손가락: 이동 · 탭: 좌클릭 · 두 손가락: 스크롤·핀치 · 세 손가락: 데스크탑 · 핸들 드래그: 높이 조절</div>
       </div>
       <div id="click-bar">
         <button id="click-left">좌클릭</button>
@@ -81,9 +131,19 @@
     </div>
   </main>
 
+  <!-- 퀵바: 자주 쓰는 시스템 단축키 (스트림덱 스타일, 모든 탭에서 상시 노출) -->
+  <div id="quickbar">
+    <button data-act="key" data-key="49" data-mods="option" aria-label="superwhisper"><svg class="icn"><use href="#i-mic"/></svg><span>위스퍼</span></button>
+    <button data-act="key" data-key="49" data-mods="shift" aria-label="Raycast"><svg class="icn"><use href="#i-bolt"/></svg><span>Raycast</span></button>
+    <button data-act="key" data-key="48" data-mods="command" aria-label="앱 전환"><svg class="icn"><use href="#i-appswitch"/></svg><span>앱 전환</span></button>
+    <button data-act="launch" data-target="/System/Applications/Mission Control.app" aria-label="미션 컨트롤"><svg class="icn"><use href="#i-mission"/></svg><span>미션</span></button>
+    <button data-act="key" data-key="21" data-mods="command,shift" aria-label="영역 캡처"><svg class="icn"><use href="#i-camera"/></svg><span>캡처</span></button>
+  </div>
+
   <nav id="tabbar">
-    <button class="tab" data-tab="keyboard"><span>⌨︎</span>키보드</button>
-    <button class="tab active" data-tab="deck"><span>⊞</span>덱</button>
+    <button class="tab" data-tab="keyboard"><svg class="icn"><use href="#i-keyboard"/></svg>키보드</button>
+    <button class="tab" data-tab="agent"><svg class="icn"><use href="#i-terminal"/></svg>에이전트</button>
+    <button class="tab active" data-tab="deck"><svg class="icn"><use href="#i-grid"/></svg>덱</button>
   </nav>
 
   <div id="modal-root"></div>
