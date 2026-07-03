@@ -29,8 +29,12 @@
           installedApps = m.list || [];
           if (appsPickerRefresh) appsPickerRefresh();
         } else if (m.t === "cmux") {
-          cmuxState = m;
-          renderCmux();
+          const snapshot = JSON.stringify(m);
+          if (snapshot !== lastCmuxJSON) {   // 변경 없으면 리렌더 생략 (폴링 깜빡임 방지)
+            lastCmuxJSON = snapshot;
+            cmuxState = m;
+            renderCmux();
+          }
         } else if (m.t === "pong") {
           const sent = pendingPings.get(m.id);
           if (sent) {
@@ -305,7 +309,7 @@
       document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "panel-" + name));
       if (name === "keyboard") setTimeout(() => kb.focus(), 50); else kb.blur();
       if (name === "deck") renderDeck();
-      if (name === "agent") requestCmux();   // 에이전트 탭 열 때 cmux 상태 갱신
+      if (name === "agent") startCmuxPoll(); else stopCmuxPoll();   // 에이전트 탭 표시 중엔 4초 자동 갱신
     });
   });
 
@@ -461,8 +465,15 @@
   });
 
   // ═════════ cmux 원격 (창 / 워크스페이스 / 탭 전환) ═════════
-  let cmuxState = null;
+  // 동기화 모델: 요청 시 스냅샷 + 에이전트 탭이 보이는 동안 4초 폴링(변경 없으면 리렌더 생략).
+  let cmuxState = null, cmuxPoll = null, lastCmuxJSON = "";
   function requestCmux(verb, target) { send({ t: "cmux", dir: verb || "state", target: target || "" }); }
+  function startCmuxPoll() {
+    stopCmuxPoll();
+    requestCmux();
+    cmuxPoll = setInterval(() => { if (document.visibilityState === "visible") requestCmux(); }, 4000);
+  }
+  function stopCmuxPoll() { if (cmuxPoll) clearInterval(cmuxPoll); cmuxPoll = null; }
   function cmuxChip(label, on, color, handler) {
     const b = document.createElement("button");
     b.className = "cmux-chip" + (on ? " on" : "");
