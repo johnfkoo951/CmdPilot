@@ -82,6 +82,9 @@ main { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 #click-bar { display: flex; gap: 8px; padding: 0 12px 12px; flex: 0 0 auto; }
 #click-bar button { flex: 1; padding: 16px 0; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 12px; font-size: 15px; }
 #click-bar button:active, #click-bar button.held { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+#air-btn { flex: 0 0 84px; display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 17px; padding: 8px 0; }
+#air-btn span { font-size: 10px; color: var(--text-dim); }
+#air-btn.held span, #air-btn:active span { color: inherit; }
 #hint { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font-size: 12px; line-height: 1.4; color: var(--text-mute); padding: 0 16px; }
 
 /* 키보드 */

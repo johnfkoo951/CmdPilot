@@ -10,7 +10,9 @@
   let networkUIRefresh = null;   // 설정 모달이 열려 있을 때 자동 프리셋 변경을 반영
 
   function connect() {
-    ws = new WebSocket(`ws://${location.host}/ws`);
+    // https(테일스케일 serve 등)로 열렸으면 wss 로 — 아니면 ws
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
     ws.onopen = () => {
       setStatus(true);
       send({ t: "hello", name: "Safari" });
@@ -106,6 +108,7 @@
     pointerHz: 60,
     pointerSmoothing: 0.16,
     resolutionScale: 1.0,
+    airSensitivity: 1.2,   // 에어마우스(자이로) 감도
     sheetPos: 0,        // 트랙패드 시트 위치 (0=풀, 1=닫힘, 중간=부분)
     sheetOpenPos: 0,    // 마지막으로 열어둔 높이
     layoutMode: "auto"  // 화면 모드: auto(폭 기준) | phone | tablet
@@ -400,6 +403,53 @@
   }
   setupClickButton(document.getElementById("click-left"), "left");
   setupClickButton(document.getElementById("click-right"), "right");
+
+  // ═════════ 에어마우스 (자이로) ═════════
+  // ✈ 버튼을 누르고 있는 동안 폰의 회전 속도(rotationRate)로 커서를 움직인다 —
+  // 폰을 리모컨처럼 들고 좌우로 돌리면 좌우, 위아래로 기울이면 상하.
+  // ⚠️ iOS 는 모션 센서를 HTTPS(보안 컨텍스트)에서만 허용 → http 접속이면 안내만 띄운다.
+  const airBtn = document.getElementById("air-btn");
+  let airActive = false, airListening = false;
+  function onAirMotion(e) {
+    if (!airActive || !e.rotationRate) return;
+    const rr = e.rotationRate;                                // deg/s
+    const k = clampNum(settings.airSensitivity || 1.2, 0.3, 3) * 0.3;
+    const dx = Math.abs(rr.alpha || 0) < 3 ? 0 : -(rr.alpha || 0) * k;   // 데드존 3°/s (손떨림)
+    const dy = Math.abs(rr.beta || 0) < 3 ? 0 : -(rr.beta || 0) * k;
+    if (dx || dy) queueMove(dx, dy);
+  }
+  async function airStart() {
+    if (typeof DeviceMotionEvent === "undefined") {
+      alert("이 브라우저는 모션 센서를 지원하지 않습니다."); return;
+    }
+    if (!airListening) {
+      if (typeof DeviceMotionEvent.requestPermission === "function") {
+        try {
+          const res = await DeviceMotionEvent.requestPermission();
+          if (res !== "granted") return;
+        } catch (err) {
+          alert("에어마우스는 HTTPS 접속에서만 동작합니다.\nTailscale HTTPS 주소(https://<맥이름>.<테일넷>.ts.net)로 접속해 주세요.");
+          return;
+        }
+      }
+      window.addEventListener("devicemotion", onAirMotion);
+      airListening = true;
+    }
+    airActive = true;
+    buzz();
+    airBtn.classList.add("held");
+  }
+  function airStop() {
+    if (!airActive) return;
+    airActive = false;
+    airBtn.classList.remove("held");
+    flushMotion(true);
+  }
+  if (airBtn) {
+    airBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); airStart(); });
+    airBtn.addEventListener("pointerup", airStop);
+    airBtn.addEventListener("pointercancel", airStop);
+  }
 
   // ═════════ 키보드 탭 ═════════
   let activeMods = [];
@@ -1076,6 +1126,7 @@
       sliderHTML("move", "커서 속도", 0.4, 3, 0.1) +
       sliderHTML("accel", "포인터 가속", 0, 0.15, 0.01) +
       sliderHTML("scroll", "스크롤 속도", 0.3, 3, 0.1) +
+      sliderHTML("air", "에어마우스 감도", 0.3, 3, 0.1) +
       '<div class="set-row"><label>스크롤 방향 반전</label><input type="checkbox" id="set-scrolldir"></div>' +
       '<div class="modal-actions"><button id="set-reset" class="danger">기본값</button><span style="flex:1"></span><button id="set-done" class="primary">완료</button></div>' +
       '<div class="about"><img class="logo-img about-logo" alt="CmdSpace"><div class="copyright">CmdSpace Pilot · fork of MacPilot</div></div>' +
@@ -1101,6 +1152,7 @@
     bind("move", "moveSpeed");
     bind("accel", "accel");
     bind("scroll", "scrollSpeed");
+    bind("air", "airSensitivity");
     bind("hz", "pointerHz", true);
     bind("smooth", "pointerSmoothing", true);
     bind("resolution", "resolutionScale", true);
