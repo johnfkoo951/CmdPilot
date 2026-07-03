@@ -2,6 +2,54 @@ import CryptoKit
 import Foundation
 import Network
 
+/// 번들 정적 자산을 시작 시 1회만 메모리에 적재 → 요청마다 디스크 I/O 없음.
+/// (현장에서 여러 기기가 동시에 페이지를 받아도 즉시 응답)
+///
+/// 개발 오버라이드: `~/Library/Application Support/MacPilot/web/` 에 같은 이름의 파일이 있으면
+/// 번들 캐시 대신 그 파일을 서빙한다 → 웹(HTML/JS/CSS)만 고칠 땐 재빌드(=ad-hoc 재서명으로
+/// 손쉬운 사용 권한 리셋) 없이 반영. 동기화: `./script/macpilotctl.sh sync-web`
+private enum AssetCache {
+    struct Item { let file: String; let data: Data; let mime: String }
+
+    static let overrideDir = FileManager.default
+        .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("MacPilot/web", isDirectory: true)
+
+    static let table: [String: Item] = {
+        func load(_ file: String, _ mime: String) -> Item? {
+            guard let dot = file.lastIndex(of: ".") else { return nil }
+            let stem = String(file[..<dot])
+            let ext = String(file[file.index(after: dot)...])
+            guard let url = Bundle.main.url(forResource: stem, withExtension: ext),
+                  let data = try? Data(contentsOf: url) else { return nil }
+            return Item(file: file, data: data, mime: mime)
+        }
+        var t: [String: Item] = [:]
+        if let a = load("index.html", "text/html; charset=utf-8") { t["/"] = a; t["/index.html"] = a }
+        if let a = load("app.js", "application/javascript; charset=utf-8") { t["/app.js"] = a }
+        if let a = load("style.css", "text/css; charset=utf-8") { t["/style.css"] = a }
+        if let a = load("manifest.webmanifest", "application/manifest+json") { t["/manifest.webmanifest"] = a }
+        if let a = load("logo.png", "image/png") { t["/logo.png"] = a; t["/favicon.ico"] = a }
+        if let a = load("icon-180.png", "image/png") {
+            for p in ["/apple-touch-icon.png", "/apple-touch-icon-precomposed.png", "/icon-180.png"] { t[p] = a }
+        }
+        if let a = load("icon-192.png", "image/png") { t["/icon-192.png"] = a }
+        if let a = load("icon-512.png", "image/png") { t["/icon-512.png"] = a }
+        if let a = load("logo-mark.png", "image/png") { t["/logo-mark.png"] = a }
+        if let a = load("logo-mark-dark.png", "image/png") { t["/logo-mark-dark.png"] = a }
+        return t
+    }()
+
+    /// 경로에 대한 응답. 오버라이드 파일이 있으면 그걸 우선(개발용), 없으면 메모리 캐시.
+    static func item(for cleanPath: String) -> Item? {
+        guard let base = table[cleanPath] else { return nil }
+        if let data = try? Data(contentsOf: overrideDir.appendingPathComponent(base.file)) {
+            return Item(file: base.file, data: data, mime: base.mime)
+        }
+        return base
+    }
+}
+
 /// 단일 TCP 연결을 받아 (1) 정적 파일 HTTP 응답 또는 (2) WebSocket 업그레이드를
 /// 처리하는 미니 서버 커넥션. 외부 의존성 없이 직접 프레이밍을 구현한다.
 ///
@@ -9,17 +57,23 @@ import Network
 ///       `Upgrade: websocket` 이면 101 핸드셰이크 후 텍스트 프레임을 명령으로 디코드.
 final class HTTPWebSocketConnection {
     private let connection: NWConnection
+    private let pairing: Pairing?
     private var buffer = [UInt8]()
     private var didUpgrade = false
     private var closing = false
+    private var idleWork: DispatchWorkItem?   // 유효 요청 없이 매달린 연결 정리용
 
     var onCommand: ((InboundCommand) -> Void)?
     var onUpgrade: (() -> Void)?
     var onClose: (() -> Void)?
 
-    init(connection: NWConnection) {
+    init(connection: NWConnection, pairing: Pairing? = nil) {
         self.connection = connection
+        self.pairing = pairing
     }
+
+    /// 외부(서버)에서 강제 종료. 페어링을 켤 때 기존 미인증 연결을 끊는 데 사용.
+    func forceClose() { closeNow() }
 
     func start() {
         connection.stateUpdateHandler = { [weak self] state in
@@ -31,6 +85,14 @@ final class HTTPWebSocketConnection {
             }
         }
         connection.start(queue: .global(qos: .userInitiated))
+        // 15초 안에 정상 요청(정적 서빙 or WS 업그레이드)이 없으면 연결을 끊는다.
+        // → 포트 스캐너/half-open 연결이 쌓여 FD를 잠그는 것을 방지.
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, !self.didUpgrade, !self.closing else { return }
+            self.closeNow()
+        }
+        idleWork = work
+        DispatchQueue.global().asyncAfter(deadline: .now() + 15, execute: work)
         receiveLoop()
     }
 
@@ -83,12 +145,66 @@ final class HTTPWebSocketConnection {
             headers[key] = value
         }
 
-        if headers["upgrade"]?.lowercased().contains("websocket") == true,
-           let key = headers["sec-websocket-key"] {
+        let isUpgrade = headers["upgrade"]?.lowercased().contains("websocket") == true
+
+        // 페어링 게이트(활성 시): 미인증이면 PIN 페이지, WS 는 거절. 비활성이면 그대로 통과.
+        if let pairing, pairing.enabled {
+            let clean = path.split(separator: "?").first.map(String.init) ?? path
+            if clean == "/pair" {
+                handlePair(path: path); return
+            }
+            let token = Pairing.readCookie(headers["cookie"], name: Pairing.cookieName)
+            if !pairing.isAuthorized(cookieToken: token) {
+                if isUpgrade { closeNow() } else { servePairPage(error: false) }
+                return
+            }
+        }
+
+        if isUpgrade, let key = headers["sec-websocket-key"] {
             performHandshake(key: key)
         } else {
             serveStatic(path: path)
         }
+    }
+
+    /// `GET /pair?pin=######` 처리: 맞으면 쿠키 발급 후 "/" 로 리다이렉트, 틀리면 에러 페이지.
+    private func handlePair(path: String) {
+        var pin: String?
+        if let query = path.split(separator: "?").dropFirst().first {
+            for field in query.split(separator: "&") {
+                let kv = field.split(separator: "=", maxSplits: 1)
+                if kv.count == 2, kv[0] == "pin" {
+                    pin = String(kv[1]).removingPercentEncoding ?? String(kv[1])
+                }
+            }
+        }
+        if let pairing, pairing.verifyPin(pin) {
+            let cookie = "\(Pairing.cookieName)=\(pairing.currentToken()); Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly"
+            let head = "HTTP/1.1 302 Found\r\nLocation: /\r\nSet-Cookie: \(cookie)\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            sendRaw(head)
+        } else {
+            servePairPage(error: true)
+        }
+    }
+
+    private func servePairPage(error: Bool) {
+        let body = Data(Pairing.pairPageHTML(error: error).utf8)
+        let head = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
+        var response = Data(head.utf8)
+        response.append(body)
+        idleWork?.cancel()
+        closing = true
+        connection.send(content: response, completion: .contentProcessed { [weak self] _ in
+            self?.connection.cancel()
+        })
+    }
+
+    private func sendRaw(_ string: String) {
+        idleWork?.cancel()
+        closing = true
+        connection.send(content: Data(string.utf8), completion: .contentProcessed { [weak self] _ in
+            self?.connection.cancel()
+        })
     }
 
     private func performHandshake(key: String) {
@@ -105,55 +221,25 @@ final class HTTPWebSocketConnection {
         """
         connection.send(content: Data(response.utf8), completion: .contentProcessed { _ in })
         didUpgrade = true
+        idleWork?.cancel()   // 정상 WS 연결은 타임아웃 대상 아님(상시 유지)
         onUpgrade?()
         parseFrames() // 버퍼에 남은 프레임 즉시 처리
     }
 
-    /// 개발용 웹 루트 오버라이드. 이 폴더에 같은 이름의 파일이 있으면 번들 대신 그걸 서빙한다.
-    /// → 웹(HTML/JS/CSS)만 고칠 땐 재빌드(=ad-hoc 재서명으로 손쉬운 사용 권한 리셋) 없이 반영.
-    ///   동기화: ./script/macpilotctl.sh sync-web
-    private static let webOverrideDir = FileManager.default
-        .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("MacPilot/web", isDirectory: true)
-
     private func serveStatic(path: String) {
         let clean = path.split(separator: "?").first.map(String.init) ?? path
-        let asset: (file: String, mime: String)?
-        switch clean {
-        case "/", "/index.html":    asset = ("index.html", "text/html; charset=utf-8")
-        case "/app.js":             asset = ("app.js", "application/javascript; charset=utf-8")
-        case "/style.css":          asset = ("style.css", "text/css; charset=utf-8")
-        case "/manifest.webmanifest": asset = ("manifest.webmanifest", "application/manifest+json")
-        case "/logo.png", "/favicon.ico":
-                                    asset = ("logo.png", "image/png")
-        case "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png", "/icon-180.png":
-                                    asset = ("icon-180.png", "image/png")
-        case "/icon-192.png":       asset = ("icon-192.png", "image/png")
-        case "/icon-512.png":       asset = ("icon-512.png", "image/png")
-        case "/logo-mark.png":      asset = ("logo-mark.png", "image/png")
-        case "/logo-mark-dark.png": asset = ("logo-mark-dark.png", "image/png")
-        default:                    asset = nil
+        idleWork?.cancel()
+        guard let item = AssetCache.item(for: clean) else {
+            sendSimple(status: "404 Not Found", body: "Not Found"); return
         }
-
-        guard let asset else { sendSimple(status: "404 Not Found", body: "Not Found"); return }
-
-        let dot = asset.file.lastIndex(of: ".")!
-        let stem = String(asset.file[..<dot])
-        let ext = String(asset.file[asset.file.index(after: dot)...])
-
-        var body: Data? = try? Data(contentsOf: Self.webOverrideDir.appendingPathComponent(asset.file))
-        if body == nil, let url = Bundle.main.url(forResource: stem, withExtension: ext) {
-            body = try? Data(contentsOf: url)
-        }
-        guard let body else { sendSimple(status: "404 Not Found", body: "Not Found"); return }
 
         let head = "HTTP/1.1 200 OK\r\n"
-            + "Content-Type: \(asset.mime)\r\n"
-            + "Content-Length: \(body.count)\r\n"
+            + "Content-Type: \(item.mime)\r\n"
+            + "Content-Length: \(item.data.count)\r\n"
             + "Cache-Control: no-store\r\n"
             + "Connection: close\r\n\r\n"
         var response = Data(head.utf8)
-        response.append(body)
+        response.append(item.data)
         closing = true
         connection.send(content: response, completion: .contentProcessed { [weak self] _ in
             self?.connection.cancel()
@@ -170,6 +256,7 @@ final class HTTPWebSocketConnection {
 
     private func closeNow() {
         closing = true
+        idleWork?.cancel()
         connection.cancel()
     }
 
@@ -237,6 +324,7 @@ final class HTTPWebSocketConnection {
         sendFrame(opcode: 0x1, payload: Data(string.utf8))
     }
 
+    /// 정중한 종료 (WS close 프레임 전송 후 소켓 정리)
     func close() {
         sendFrame(opcode: 0x8, payload: Data())
         closeNow()

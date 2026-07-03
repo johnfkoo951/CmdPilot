@@ -18,6 +18,7 @@ struct MenuContentView: View {
             metrics
             connectionPanel
             permissionPanel
+            pairingPanel
             operations
             footer
         }
@@ -188,6 +189,41 @@ struct MenuContentView: View {
                 .tint(CMDSBrand.pink)
                 .controlSize(.small)
                 .help("손쉬운 사용 설정 열기 — 재빌드(ad-hoc 서명) 후에는 다시 켜야 합니다")
+            }
+        }
+        .panelStyle()
+    }
+
+    /// PIN 페어링 (upstream 기능): 같은 네트워크의 타인 접속 차단. 기본 off.
+    private var pairingPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: Binding(get: { server.pairingEnabled },
+                                 set: { server.setPairing($0) })) {
+                Label("PIN 페어링", systemImage: "lock.shield")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .toggleStyle(.switch)
+            .tint(CMDSBrand.pink)
+
+            if server.pairingEnabled {
+                HStack {
+                    Text(server.pairingPin)
+                        .font(.system(.title3, design: .monospaced))
+                        .bold()
+                        .textSelection(.enabled)
+                    Spacer()
+                    Button("새 PIN") { server.regeneratePairingPin() }
+                        .controlSize(.small)
+                }
+                Text("접속하는 기기가 이 PIN을 한 번 입력하면 1년간 기억됩니다. 켜는 순간 기존 연결은 끊깁니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("켜면 같은 네트워크(공용 Wi-Fi 등)의 타인이 함부로 조작하지 못합니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .panelStyle()

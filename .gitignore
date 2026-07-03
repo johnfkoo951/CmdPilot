@@ -22,4 +22,17 @@ iOSApp/
 Shared/
 project.local.yml
 .codex/
-.release/
+
+
+# 세션 핸드오프(로컬 전용)
+context/
+
+# Windows / .NET (WindowsHelper) build artifacts
+[Bb]in/
+[Oo]bj/
+publish/
+*.user
+*.suo
+.vs/
+WindowsHelper/**/bin/
+WindowsHelper/**/obj/
