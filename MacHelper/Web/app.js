@@ -5,11 +5,18 @@
   const statusEl = document.getElementById("status");
   const dot = document.getElementById("dot");
   let ws = null, reconnectTimer = null;
+  let latencyMs = null, pingTimer = null;
+  const pendingPings = new Map();
 
   function connect() {
     ws = new WebSocket(`ws://${location.host}/ws`);
-    ws.onopen = () => { setStatus(true); send({ t: "hello", name: "Safari" }); send({ t: "getDeck" }); };
-    ws.onclose = () => { setStatus(false); scheduleReconnect(); };
+    ws.onopen = () => {
+      setStatus(true);
+      send({ t: "hello", name: "Safari" });
+      send({ t: "getDeck" });
+      startPing();
+    };
+    ws.onclose = () => { stopPing(); setStatus(false); scheduleReconnect(); };
     ws.onerror = () => { try { ws.close(); } catch (e) {} };
     ws.onmessage = (ev) => {
       try {
@@ -20,13 +27,44 @@
         } else if (m.t === "apps") {
           installedApps = m.list || [];
           if (appsPickerRefresh) appsPickerRefresh();
+        } else if (m.t === "pong") {
+          const sent = pendingPings.get(m.id);
+          if (sent) {
+            pendingPings.delete(m.id);
+            latencyMs = Math.max(1, Math.round(performance.now() - sent));
+            setStatus(true);
+            const lat = document.getElementById("set-latency");
+            if (lat) lat.textContent = latencyMs + "ms";
+          }
         }
       } catch (e) {}
     };
   }
   function scheduleReconnect() { clearTimeout(reconnectTimer); reconnectTimer = setTimeout(connect, 1000); }
-  function setStatus(ok) { statusEl.textContent = ok ? "연결됨" : "연결 끊김 · 재시도 중…"; dot.className = "dot" + (ok ? " on" : ""); }
+  function setStatus(ok) {
+    statusEl.textContent = ok ? ("연결됨" + (latencyMs ? " · " + latencyMs + "ms" : "")) : "연결 끊김 · 재시도 중…";
+    dot.className = "dot" + (ok ? " on" : "");
+  }
   function send(obj) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); }
+  function startPing() {
+    stopPing();
+    const ping = () => {
+      const id = "p" + Math.random().toString(36).slice(2, 9);
+      pendingPings.set(id, performance.now());
+      send({ t: "ping", id });
+      for (const [key, value] of pendingPings) {
+        if (performance.now() - value > 10000) pendingPings.delete(key);
+      }
+    };
+    ping();
+    pingTimer = setInterval(ping, 3000);
+  }
+  function stopPing() {
+    if (pingTimer) clearInterval(pingTimer);
+    pingTimer = null;
+    pendingPings.clear();
+    latencyMs = null;
+  }
 
   // ───────── 페이지 확대(핀치/더블탭) 강제 차단 ─────────
   // iOS 사파리는 viewport 메타를 무시하므로 gesture 이벤트를 직접 막아야 함.
@@ -38,8 +76,24 @@
   }, { passive: false });
 
   // ───────── 설정 (감도 등, 기기별 localStorage) ─────────
-  const SETTINGS_KEY = "macpilot.settings.v1";
-  const SETTINGS_DEFAULTS = { moveSpeed: 1.1, accel: 0.05, scrollSpeed: 1.0, scrollDir: 1, theme: "dark" };
+  const SETTINGS_KEY = "macpilot.settings.v2";
+  const SETTINGS_DEFAULTS = {
+    moveSpeed: 1.15,
+    accel: 0.045,
+    scrollSpeed: 1.0,
+    scrollDir: 1,
+    theme: "dark",
+    networkPreset: "balanced",
+    pointerHz: 60,
+    pointerSmoothing: 0.16,
+    resolutionScale: 1.0
+  };
+  const NETWORK_PRESETS = {
+    fast: { label: "빠른 Wi-Fi", pointerHz: 90, pointerSmoothing: 0.08, resolutionScale: 1.05 },
+    balanced: { label: "균형", pointerHz: 60, pointerSmoothing: 0.16, resolutionScale: 1.0 },
+    stable: { label: "불안정한 네트워크", pointerHz: 36, pointerSmoothing: 0.26, resolutionScale: 0.92 },
+    manual: { label: "수동", pointerHz: 60, pointerSmoothing: 0.16, resolutionScale: 1.0 }
+  };
   let settings = loadSettings();
   function loadSettings() {
     try { const r = localStorage.getItem(SETTINGS_KEY); if (r) return Object.assign({}, SETTINGS_DEFAULTS, JSON.parse(r)); } catch (e) {}
@@ -59,11 +113,85 @@
     const t = resolvedTheme();
     document.documentElement.setAttribute("data-theme", t);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", t === "light" ? "#f2f2f4" : "#141416");
+    if (meta) meta.setAttribute("content", t === "light" ? "#f6f7f8" : "#0f1115");
     updateLogos();
   }
   themeMQ.addEventListener("change", () => { if (settings.theme === "system") applyTheme(); });
+  function applyNetworkPreset(name) {
+    const preset = NETWORK_PRESETS[name];
+    if (!preset || name === "manual") return;
+    settings.networkPreset = name;
+    settings.pointerHz = preset.pointerHz;
+    settings.pointerSmoothing = preset.pointerSmoothing;
+    settings.resolutionScale = preset.resolutionScale;
+  }
+  if (settings.networkPreset && settings.networkPreset !== "manual") applyNetworkPreset(settings.networkPreset);
   applyTheme();
+
+  // ───────── 모션 전송 큐 ─────────
+  // touchmove 이벤트를 그대로 모두 보내면 네트워크/브라우저 상태에 따라 커서가 덩어리져 보인다.
+  // 프레임 단위로 델타를 모아 일정한 주기로 보내고, 필요 시 잔여 델타를 짧게 분산한다.
+  let motionRAF = null, motionTimer = null, lastMotionFlush = 0;
+  let pendingMove = { dx: 0, dy: 0 }, pendingScroll = { dx: 0, dy: 0 }, smoothCarry = { dx: 0, dy: 0 };
+  function clampNum(v, min, max) { return Math.max(min, Math.min(max, Number(v) || 0)); }
+  function motionInterval() { return 1000 / clampNum(settings.pointerHz || 60, 24, 120); }
+  function motionScale() { return clampNum(settings.resolutionScale || 1, 0.5, 2); }
+  function scheduleMotion() {
+    if (motionRAF || motionTimer) return;
+    const wait = Math.max(0, motionInterval() - (performance.now() - lastMotionFlush));
+    const arm = () => { motionRAF = requestAnimationFrame(flushMotionFrame); };
+    if (wait > 4) motionTimer = setTimeout(() => { motionTimer = null; arm(); }, wait);
+    else arm();
+  }
+  function queueMove(dx, dy) {
+    const scale = motionScale();
+    pendingMove.dx += dx * scale;
+    pendingMove.dy += dy * scale;
+    scheduleMotion();
+  }
+  function queueScroll(dx, dy) {
+    pendingScroll.dx += dx;
+    pendingScroll.dy += dy;
+    scheduleMotion();
+  }
+  function flushMotion(immediate) {
+    if (motionTimer) { clearTimeout(motionTimer); motionTimer = null; }
+    if (motionRAF) { cancelAnimationFrame(motionRAF); motionRAF = null; }
+    if (immediate) {
+      if (Math.abs(pendingMove.dx) > 0.01 || Math.abs(pendingMove.dy) > 0.01) send({ t: "move", dx: pendingMove.dx + smoothCarry.dx, dy: pendingMove.dy + smoothCarry.dy });
+      if (Math.abs(pendingScroll.dx) > 0.01 || Math.abs(pendingScroll.dy) > 0.01) send({ t: "scroll", dx: pendingScroll.dx, dy: pendingScroll.dy });
+      pendingMove = { dx: 0, dy: 0 }; pendingScroll = { dx: 0, dy: 0 }; smoothCarry = { dx: 0, dy: 0 };
+      lastMotionFlush = performance.now();
+      return;
+    }
+    flushMotionFrame(performance.now());
+  }
+  function flushMotionFrame(t) {
+    motionRAF = null;
+    lastMotionFlush = t || performance.now();
+
+    if (Math.abs(pendingScroll.dx) > 0.01 || Math.abs(pendingScroll.dy) > 0.01) {
+      send({ t: "scroll", dx: pendingScroll.dx, dy: pendingScroll.dy });
+      pendingScroll = { dx: 0, dy: 0 };
+    }
+
+    const rawDx = pendingMove.dx + smoothCarry.dx;
+    const rawDy = pendingMove.dy + smoothCarry.dy;
+    pendingMove = { dx: 0, dy: 0 };
+    smoothCarry = { dx: 0, dy: 0 };
+    if (Math.abs(rawDx) > 0.01 || Math.abs(rawDy) > 0.01) {
+      const s = clampNum(settings.pointerSmoothing || 0, 0, 0.45);
+      const outDx = rawDx * (1 - s);
+      const outDy = rawDy * (1 - s);
+      const carryDx = rawDx - outDx;
+      const carryDy = rawDy - outDy;
+      send({ t: "move", dx: outDx, dy: outDy });
+      if (Math.hypot(carryDx, carryDy) > 0.03) {
+        smoothCarry = { dx: carryDx, dy: carryDy };
+        scheduleMotion();
+      }
+    }
+  }
 
   // ───────── 키 매핑 ─────────
   const KEYMAP = {
@@ -164,6 +292,7 @@
     const release = () => {
       if (button === "left") { if (!leftHeld) return; leftHeld = false; }
       else { if (!rightHeld) return; rightHeld = false; }
+      flushMotion(true);
       btn.classList.remove("held");
       send({ t: "up", button });
     };
@@ -668,7 +797,11 @@
   }
 
   // ═════════ 설정 모달 ═════════
-  function fmt(key) { return key === "accel" ? Math.round(settings[key] * 100) + "%" : settings[key].toFixed(1) + "×"; }
+  function fmt(key) {
+    if (key === "accel" || key === "pointerSmoothing") return Math.round(settings[key] * 100) + "%";
+    if (key === "pointerHz") return Math.round(settings[key]) + "Hz";
+    return settings[key].toFixed(2).replace(/\.00$/, "") + "×";
+  }
   function sliderHTML(id, label, min, max, step) {
     return '<div class="set-row"><label>' + label + '</label><span class="set-val" id="sv-' + id + '"></span></div>' +
       '<input type="range" class="set-slider" id="set-' + id + '" min="' + min + '" max="' + max + '" step="' + step + '">';
@@ -679,29 +812,69 @@
       '<div class="modal-head"><div class="modal-title">설정</div><button id="set-close" class="modal-x">✕</button></div>' +
       '<div class="set-section">테마</div>' +
       '<div class="seg" id="set-theme"><button data-theme="system">시스템</button><button data-theme="light">라이트</button><button data-theme="dark">다크</button></div>' +
+      '<div class="set-section">네트워크/주사율</div>' +
+      '<div class="seg net-presets" id="set-network"><button data-net="fast">빠른 Wi-Fi</button><button data-net="balanced">균형</button><button data-net="stable">불안정</button><button data-net="manual">수동</button></div>' +
+      '<div class="latency-card"><span>현재 지연율</span><b id="set-latency">' + (latencyMs ? latencyMs + "ms" : "측정 중") + '</b></div>' +
+      sliderHTML("hz", "전송 주사율", 24, 120, 1) +
+      sliderHTML("smooth", "움직임 보정", 0, 0.45, 0.01) +
+      sliderHTML("resolution", "해상도 배율", 0.5, 2, 0.05) +
       '<div class="set-section">트랙패드</div>' +
       sliderHTML("move", "커서 속도", 0.4, 3, 0.1) +
       sliderHTML("accel", "포인터 가속", 0, 0.15, 0.01) +
       sliderHTML("scroll", "스크롤 속도", 0.3, 3, 0.1) +
       '<div class="set-row"><label>스크롤 방향 반전</label><input type="checkbox" id="set-scrolldir"></div>' +
       '<div class="modal-actions"><button id="set-reset" class="danger">기본값</button><span style="flex:1"></span><button id="set-done" class="primary">완료</button></div>' +
-      '<div class="about"><img class="logo-img about-logo" alt="JoonLab"><div class="copyright">© joonlab · MacPilot</div></div>' +
+      '<div class="about"><img class="logo-img about-logo" alt="CmdSpace"><div class="copyright">CmdSpace Pilot · fork of MacPilot</div></div>' +
       '</div>';
     const close = () => { modalRoot.innerHTML = ""; };
     modalRoot.querySelector(".modal-bg").addEventListener("click", close);
     modalRoot.querySelector("#set-close").addEventListener("click", close);
     modalRoot.querySelector("#set-done").addEventListener("click", close);
 
-    const bind = (id, key) => {
+    const bind = (id, key, manualOnInput) => {
       const el = modalRoot.querySelector("#set-" + id);
       const val = modalRoot.querySelector("#sv-" + id);
       el.value = settings[key];
       val.textContent = fmt(key);
-      el.addEventListener("input", () => { settings[key] = parseFloat(el.value); val.textContent = fmt(key); saveSettings(); });
+      el.addEventListener("input", () => {
+        settings[key] = parseFloat(el.value);
+        if (manualOnInput) settings.networkPreset = "manual";
+        val.textContent = fmt(key);
+        saveSettings();
+        refreshNetworkButtons();
+      });
     };
     bind("move", "moveSpeed");
     bind("accel", "accel");
     bind("scroll", "scrollSpeed");
+    bind("hz", "pointerHz", true);
+    bind("smooth", "pointerSmoothing", true);
+    bind("resolution", "resolutionScale", true);
+
+    function syncNetworkSliders() {
+      [["hz","pointerHz"],["smooth","pointerSmoothing"],["resolution","resolutionScale"]].forEach(([id, key]) => {
+        const el = modalRoot.querySelector("#set-" + id);
+        const val = modalRoot.querySelector("#sv-" + id);
+        if (el && val) { el.value = settings[key]; val.textContent = fmt(key); }
+      });
+    }
+    function refreshNetworkButtons() {
+      modalRoot.querySelectorAll("#set-network button").forEach((b) => {
+        b.classList.toggle("on", b.dataset.net === (settings.networkPreset || "balanced"));
+      });
+      const lat = modalRoot.querySelector("#set-latency");
+      if (lat) lat.textContent = latencyMs ? latencyMs + "ms" : "측정 중";
+    }
+    modalRoot.querySelectorAll("#set-network button").forEach((b) => {
+      b.addEventListener("click", () => {
+        settings.networkPreset = b.dataset.net;
+        applyNetworkPreset(settings.networkPreset);
+        saveSettings();
+        syncNetworkSliders();
+        refreshNetworkButtons();
+      });
+    });
+    refreshNetworkButtons();
 
     const dir = modalRoot.querySelector("#set-scrolldir");
     dir.checked = settings.scrollDir === -1;
@@ -748,7 +921,7 @@
       const dt = Math.min(t - prev, 32); prev = t;
       scrollVX *= FRICTION; scrollVY *= FRICTION;
       if (Math.hypot(scrollVX, scrollVY) < MOMENTUM_MIN) { momentumRAF = null; return; }
-      send({ t: "scroll", dx: scrollVX * dt * settings.scrollSpeed * settings.scrollDir, dy: scrollVY * dt * settings.scrollSpeed * settings.scrollDir });
+      queueScroll(scrollVX * dt * settings.scrollSpeed * settings.scrollDir, scrollVY * dt * settings.scrollSpeed * settings.scrollDir);
       momentumRAF = requestAnimationFrame(step);
     };
     momentumRAF = requestAnimationFrame(step);
@@ -758,11 +931,12 @@
     const dx = g3last.x - g3start.x, dy = g3last.y - g3start.y;
     if (Math.hypot(dx, dy) < SWIPE3_THRESH) return;
     const dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
+    flushMotion(true);
     send({ t: "gesture", dir }); g3fired = true;
   }
 
   pad.addEventListener("touchstart", (e) => {
-    e.preventDefault(); stopMomentum();
+    e.preventDefault(); stopMomentum(); flushMotion(true);
     const n = e.touches.length;
     if (n === 1) {
       startTime = now(); moved = false; maxTouches = 1; dragging = false;
@@ -794,7 +968,7 @@
           const dx = c.x - lastCentroid.x, dy = c.y - lastCentroid.y;
           const t = now(), dt = Math.max(t - lastScrollMoveT, 1);
           scrollVX = 0.6 * scrollVX + 0.4 * (dx / dt); scrollVY = 0.6 * scrollVY + 0.4 * (dy / dt); lastScrollMoveT = t;
-          if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) send({ t: "scroll", dx: dx * settings.scrollSpeed * settings.scrollDir, dy: dy * settings.scrollSpeed * settings.scrollDir });
+          if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) queueScroll(dx * settings.scrollSpeed * settings.scrollDir, dy * settings.scrollSpeed * settings.scrollDir);
         }
       }
       lastCentroid = c; moved = true; armedForDrag = false;
@@ -804,8 +978,8 @@
       if (Math.abs(dx) > TAP_MOVE || Math.abs(dy) > TAP_MOVE) moved = true;
       if (armedForDrag && !dragging && moved) { dragging = true; send({ t: "down", button: "left" }); }
       if (dx !== 0 || dy !== 0) {
-        if (dragging) send({ t: "move", dx: dx * settings.moveSpeed, dy: dy * settings.moveSpeed });
-        else { const speed = Math.hypot(dx, dy); const f = settings.moveSpeed * (1 + Math.min(speed, ACCEL_CAP) * settings.accel); send({ t: "move", dx: dx * f, dy: dy * f }); }
+        if (dragging) queueMove(dx * settings.moveSpeed, dy * settings.moveSpeed);
+        else { const speed = Math.hypot(dx, dy); const f = settings.moveSpeed * (1 + Math.min(speed, ACCEL_CAP) * settings.accel); queueMove(dx * f, dy * f); }
       }
       last = { x, y };
     }
@@ -819,15 +993,16 @@
       return;
     }
     if (e.touches.length === 0) {
-      if (dragging) { send({ t: "up", button: "left" }); dragging = false; }
+      if (dragging) { flushMotion(true); send({ t: "up", button: "left" }); dragging = false; }
       else {
         const duration = now() - startTime;
         if (!moved && duration < TAP_MS && !buttonHeld()) {
           if (maxTouches >= 2) { send({ t: "click", button: "right" }); clickCount = 0; lastClickTime = 0; }
           else { const t = now(); clickCount = (t - lastClickTime < DOUBLE_MS) ? clickCount + 1 : 1; lastClickTime = t; send({ t: "click", button: "left", count: clickCount }); }
           lastTapEnd = now();
-        } else if (moved && twoMode === "scroll" && (now() - lastScrollMoveT) < 120) startMomentum();
+        } else if (moved && twoMode === "scroll" && (now() - lastScrollMoveT) < 120) { flushMotion(true); startMomentum(); }
       }
+      flushMotion(true);
       last = null; lastCentroid = null; maxTouches = 0; armedForDrag = false; twoMode = null;
     } else {
       if (e.touches.length === 1) last = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -837,7 +1012,7 @@
 
   pad.addEventListener("touchcancel", () => {
     if (threeMode) fireSwipeIfNeeded();
-    if (dragging) { send({ t: "up", button: "left" }); dragging = false; }
+    if (dragging) { flushMotion(true); send({ t: "up", button: "left" }); dragging = false; }
     threeMode = false; g3fired = false; g3start = null; g3last = null; twoMode = null;
     last = null; lastCentroid = null; maxTouches = 0; armedForDrag = false;
   }, { passive: false });

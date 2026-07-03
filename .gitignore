@@ -21,3 +21,5 @@ xcuserdata/
 iOSApp/
 Shared/
 project.local.yml
+.codex/
+.release/

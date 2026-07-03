@@ -10,6 +10,7 @@ import Foundation
 ///     {"t":"key","keyCode":49,"mods":["command"]}
 struct InboundCommand: Decodable {
     let t: String
+    let id: String?        // "ping" 응답 매칭용
     let dx: Double?
     let dy: Double?
     let button: String?

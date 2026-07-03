@@ -4,90 +4,225 @@ import SwiftUI
 struct MenuContentView: View {
     @ObservedObject var server: HelperServer
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("MacPilot 헬퍼")
-                .font(.headline)
+    private var serverTint: Color { server.isRunning ? .green : .orange }
 
-            // 서버 상태
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(server.isRunning ? Color.green : Color.orange)
-                    .frame(width: 8, height: 8)
-                Text(server.isRunning ? "실행 중" : "시작 실패 · 포트 확인")
-                    .font(.callout)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            header
+            metrics
+            connectionPanel
+            permissionPanel
+            operations
+            footer
+        }
+        .padding(16)
+        .frame(width: 360)
+        .onAppear { server.refreshAccessibility() }
+    }
+
+    private var header: some View {
+        HStack(alignment: .center, spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(.regularMaterial)
+                    .frame(width: 38, height: 38)
+                Image(systemName: "dot.radiowaves.left.and.right")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(serverTint)
             }
 
-            if server.isRunning {
-                // 접속 주소 + QR
-                Text("아이폰 사파리로 접속하거나 카메라로 QR을 스캔하세요")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("CmdSpace Pilot")
+                    .font(.headline)
+                Text(server.launchModeDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
 
-                if let qr = Self.makeQR(server.httpURL) {
+            Spacer()
+
+            StatusPill(
+                title: server.isRunning ? "Online" : "Offline",
+                systemImage: server.isRunning ? "checkmark.circle.fill" : "exclamationmark.circle.fill",
+                tint: serverTint
+            )
+        }
+    }
+
+    private var metrics: some View {
+        HStack(spacing: 8) {
+            MetricTile(
+                title: "포트",
+                value: "\(server.port)",
+                systemImage: "network",
+                tint: .blue
+            )
+            MetricTile(
+                title: "클라이언트",
+                value: "\(server.activeClients)",
+                systemImage: server.activeClients > 0 ? "iphone.gen3.radiowaves.left.and.right" : "iphone.slash",
+                tint: server.activeClients > 0 ? .green : .secondary
+            )
+            MetricTile(
+                title: "명령",
+                value: "\(server.commandCount)",
+                systemImage: "keyboard",
+                tint: .purple
+            )
+        }
+    }
+
+    private var connectionPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("접속 주소", systemImage: "link")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Button {
+                    server.copyURL()
+                } label: {
+                    Label("복사", systemImage: "doc.on.doc")
+                }
+                .labelStyle(.iconOnly)
+                .help("접속 주소 복사")
+
+                Button {
+                    server.openWebUI()
+                } label: {
+                    Label("열기", systemImage: "safari")
+                }
+                .labelStyle(.iconOnly)
+                .help("브라우저에서 열기")
+            }
+
+            Text(server.httpURL)
+                .font(.system(.callout, design: .monospaced))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+
+            if !server.ipFallback.isEmpty {
+                Text(server.ipFallback)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+
+            if server.isRunning, let qr = Self.makeQR(server.httpURL) {
+                HStack(spacing: 12) {
                     Image(nsImage: qr)
                         .interpolation(.none)
                         .resizable()
-                        .frame(width: 140, height: 140)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                }
+                        .frame(width: 104, height: 104)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                HStack {
-                    Text(server.httpURL)
-                        .font(.system(.callout, design: .monospaced))
-                        .textSelection(.enabled)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("같은 Wi-Fi에서 접속", systemImage: "wifi")
+                            .font(.callout)
+                        Text(server.restartBehaviorDescription)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("최근: \(server.lastCommand)")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
                     Spacer()
-                    Button("복사") { server.copyURL() }
                 }
-                if !server.ipFallback.isEmpty {
-                    Text(server.ipFallback)
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                        .textSelection(.enabled)
-                }
-
-                Label(server.activeClients > 0 ? "연결됨: \(server.activeClients)대" : "대기 중",
-                      systemImage: server.activeClients > 0 ? "iphone.radiowaves.left.and.right" : "iphone.slash")
-                    .font(.callout)
-                    .foregroundStyle(server.activeClients > 0 ? .green : .secondary)
-
-                // 진단: 명령 수가 늘면 '도착은 함' → 안 움직이면 권한 문제
-                Text("받은 명령: \(server.commandCount)  (\(server.lastCommand))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Divider()
-
-            // 손쉬운 사용 권한
-            HStack(spacing: 6) {
-                Image(systemName: server.accessibilityGranted ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                    .foregroundStyle(server.accessibilityGranted ? .green : .orange)
-                Text(server.accessibilityGranted ? "손쉬운 사용 권한 OK" : "손쉬운 사용 권한 필요")
-                    .font(.callout)
-            }
-            if !server.accessibilityGranted {
-                Text("이 권한이 없으면 마우스/키보드가 실제로 움직이지 않습니다.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button("권한 요청 / 설정 열기") {
-                    server.promptAccessibility()
-                    server.openAccessibilitySettings()
-                }
-            }
-            Button("권한 상태 새로고침") {
-                server.refreshAccessibility()
-            }
-
-            Divider()
-
-            Button("종료") {
-                NSApplication.shared.terminate(nil)
             }
         }
-        .padding()
-        .frame(width: 280)
-        .onAppear { server.refreshAccessibility() }
+        .panelStyle()
+    }
+
+    private var permissionPanel: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: server.accessibilityGranted ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                .font(.title3)
+                .foregroundStyle(server.accessibilityGranted ? .green : .orange)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(server.accessibilityGranted ? "손쉬운 사용 권한 OK" : "손쉬운 사용 권한 필요")
+                    .font(.subheadline.weight(.semibold))
+                Text(server.accessibilityGranted ? "마우스/키보드 주입 가능" : "권한이 없으면 명령은 도착해도 실제 입력이 움직이지 않습니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+
+            if server.accessibilityGranted {
+                Button {
+                    server.refreshAccessibility()
+                } label: {
+                    Label("새로고침", systemImage: "arrow.clockwise")
+                }
+                .labelStyle(.iconOnly)
+                .help("권한 상태 새로고침")
+            } else {
+                Button {
+                    server.promptAccessibility()
+                    server.openAccessibilitySettings()
+                } label: {
+                    Label("설정", systemImage: "gearshape")
+                }
+                .labelStyle(.iconOnly)
+                .help("손쉬운 사용 설정 열기")
+            }
+        }
+        .panelStyle()
+    }
+
+    private var operations: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Button {
+                    server.restart()
+                } label: {
+                    Label("서버 재시작", systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
+                }
+
+                Button {
+                    server.openLogsFolder()
+                } label: {
+                    Label("로그", systemImage: "folder")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button {
+                    server.copyStatusCommand()
+                } label: {
+                    Label("상태 명령 복사", systemImage: "terminal")
+                        .frame(maxWidth: .infinity)
+                }
+
+                Button(role: .destructive) {
+                    NSApplication.shared.terminate(nil)
+                } label: {
+                    Label("앱 종료", systemImage: "power")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.regular)
+    }
+
+    private var footer: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "slider.horizontal.3")
+                .foregroundStyle(.secondary)
+            Text("성능/네트워크 프리셋은 폰 UI의 설정에서 조정")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
     }
 
     /// 문자열을 QR 코드 NSImage 로 변환
@@ -102,5 +237,51 @@ struct MenuContentView: View {
         let image = NSImage(size: rep.size)
         image.addRepresentation(rep)
         return image
+    }
+}
+
+private struct StatusPill: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+}
+
+private struct MetricTile: View {
+    let title: String
+    let value: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: systemImage)
+                .foregroundStyle(tint)
+            Text(value)
+                .font(.system(.title3, design: .rounded).weight(.semibold))
+                .monospacedDigit()
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private extension View {
+    func panelStyle() -> some View {
+        self
+            .padding(12)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }

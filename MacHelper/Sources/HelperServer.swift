@@ -16,7 +16,8 @@ final class HelperServer: ObservableObject {
     @Published var commandCount = 0
     @Published var lastCommand = "-"
 
-    let port: UInt16 = 8765
+    let port: UInt16 = 8766   // 8765 는 OmniControl bridge 가 사용 중이라 변경
+    let launchAgentLabel = "com.joonlab.macpilot.helper"
 
     private var listener: NWListener?
     private var connections: [ObjectIdentifier: HTTPWebSocketConnection] = [:]
@@ -68,6 +69,17 @@ final class HelperServer: ObservableObject {
         client.onCommand = { [weak self, weak client] command in
             // 덱 동기화 명령은 입력 주입이 아니라 별도 처리
             switch command.t {
+            case "ping":
+                let payload: [String: Any] = [
+                    "t": "pong",
+                    "id": command.id ?? "",
+                    "serverTime": Int(Date().timeIntervalSince1970 * 1000)
+                ]
+                if let data = try? JSONSerialization.data(withJSONObject: payload),
+                   let text = String(data: data, encoding: .utf8) {
+                    client?.sendText(text)
+                }
+                return
             case "getDeck":
                 let json = DeckStore.loadString() ?? "null"
                 client?.sendText("{\"t\":\"deck\",\"json\":\(json)}")
@@ -127,6 +139,23 @@ final class HelperServer: ObservableObject {
         }
     }
 
+    func stop() {
+        listener?.cancel()
+        listener = nil
+        Array(connections.values).forEach { $0.close() }
+        connections.removeAll()
+        upgradedKeys.removeAll()
+        activeClients = 0
+        isRunning = false
+    }
+
+    func restart() {
+        stop()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            self?.start()
+        }
+    }
+
     // MARK: - 손쉬운 사용(Accessibility) 권한
 
     func refreshAccessibility() {
@@ -145,8 +174,38 @@ final class HelperServer: ObservableObject {
     }
 
     func copyURL() {
+        copyText(httpURL)
+    }
+
+    func copyStatusCommand() {
+        copyText("./script/macpilotctl.sh status")
+    }
+
+    func openWebUI() {
+        guard let url = URL(string: httpURL) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    func openLogsFolder() {
+        let url = URL(fileURLWithPath: "\(NSHomeDirectory())/Library/Logs/MacPilot", isDirectory: true)
+        NSWorkspace.shared.open(url)
+    }
+
+    var launchModeDescription: String {
+        ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] == launchAgentLabel
+            ? "LaunchAgent 상시 실행"
+            : "직접 실행"
+    }
+
+    var restartBehaviorDescription: String {
+        ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] == launchAgentLabel
+            ? "앱을 종료해도 launchd가 다시 시작"
+            : "터미널/실행 세션 종료 시 함께 종료"
+    }
+
+    private func copyText(_ text: String) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(httpURL, forType: .string)
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     // MARK: - 진단 로깅 (/tmp/macpilot-cmd.log)

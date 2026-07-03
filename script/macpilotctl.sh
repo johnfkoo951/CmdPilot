@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP_NAME="MacPilot Helper"
+LABEL="com.joonlab.macpilot.helper"
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+APP_BINARY="$HOME/Applications/$APP_NAME.app/Contents/MacOS/$APP_NAME"
+LOG_FILE="$HOME/Library/Logs/MacPilot/helper.log"
+PORT="$(sed -n 's/.*let port: UInt16 = \([0-9][0-9]*\).*/\1/p' "$ROOT_DIR/MacHelper/Sources/HelperServer.swift" | head -1)"
+PORT="${PORT:-8765}"
+
+url() {
+  local host
+  host="$(scutil --get LocalHostName 2>/dev/null || printf localhost)"
+  printf 'http://%s.local:%s\n' "$host" "$PORT"
+}
+
+print_status() {
+  echo "MacPilot Helper"
+  echo "URL: $(url)"
+  echo
+
+  local job
+  job="$(launchctl print "gui/$(id -u)/$LABEL" 2>/dev/null || true)"
+  if [[ -n "$job" ]]; then
+    echo "LaunchAgent: loaded"
+    echo "$job" | awk '/state =|pid =|path =|program =|properties =/ { sub(/^[ \t]+/, ""); print }'
+  else
+    echo "LaunchAgent: not loaded"
+  fi
+
+  echo
+  if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "Port $PORT: listening"
+    lsof -nP -iTCP:"$PORT" -sTCP:LISTEN
+  else
+    echo "Port $PORT: not listening"
+  fi
+
+  echo
+  if curl -fsS --max-time 2 "http://127.0.0.1:$PORT/" >/dev/null 2>&1; then
+    echo "HTTP: ok"
+  else
+    echo "HTTP: unavailable"
+  fi
+}
+
+start_agent() {
+  if [[ ! -f "$PLIST" ]]; then
+    "$ROOT_DIR/deploy.sh"
+    return
+  fi
+
+  if launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1; then
+    launchctl kickstart -k "gui/$(id -u)/$LABEL"
+  else
+    launchctl bootstrap "gui/$(id -u)" "$PLIST"
+  fi
+}
+
+stop_agent() {
+  if launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1; then
+    launchctl bootout "gui/$(id -u)" "$PLIST"
+  fi
+  pkill -f "$APP_BINARY" >/dev/null 2>&1 || true
+}
+
+case "${1:-status}" in
+  status)
+    print_status
+    ;;
+  start)
+    start_agent
+    print_status
+    ;;
+  stop)
+    stop_agent
+    print_status
+    ;;
+  restart)
+    stop_agent
+    start_agent
+    print_status
+    ;;
+  logs)
+    mkdir -p "$(dirname "$LOG_FILE")"
+    touch "$LOG_FILE"
+    tail -n 80 -f "$LOG_FILE"
+    ;;
+  open)
+    /usr/bin/open "$(url)"
+    ;;
+  url)
+    url
+    ;;
+  install)
+    "$ROOT_DIR/deploy.sh"
+    ;;
+  *)
+    echo "usage: $0 {status|start|stop|restart|logs|open|url|install}" >&2
+    exit 2
+    ;;
+esac

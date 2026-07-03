@@ -218,6 +218,11 @@ final class HTTPWebSocketConnection {
         sendFrame(opcode: 0x1, payload: Data(string.utf8))
     }
 
+    func close() {
+        sendFrame(opcode: 0x8, payload: Data())
+        closeNow()
+    }
+
     private func sendFrame(opcode: UInt8, payload: Data) {
         var frame: [UInt8] = [0x80 | opcode]
         let n = payload.count

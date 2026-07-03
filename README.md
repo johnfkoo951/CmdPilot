@@ -1,15 +1,15 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="MacHelper/Web/logo-mark-dark.png">
-    <img src="MacHelper/Web/logo-mark.png" width="240" alt="JoonLab">
+    <img src="MacHelper/Web/logo-mark.png" width="240" alt="CmdSpace">
   </picture>
 </p>
 
-<h1 align="center">MacPilot</h1>
+<h1 align="center">CmdSpace Pilot</h1>
 
 <p align="center">
   <b>Turn your Mac into a wireless trackpad, keyboard & Stream-Deck — controlled from any phone's browser.</b><br>
-  <b>No app to install. Open source. Built end-to-end with Claude Code.</b>
+  <b>No phone app to install. Open source. Forked from MacPilot for CmdSpace.</b>
 </p>
 
 <p align="center">
@@ -17,10 +17,10 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/license-MIT-A50034">
+  <img src="https://img.shields.io/badge/license-MIT-087F68">
   <img src="https://img.shields.io/badge/platform-macOS%2013%2B-8A8D8F">
   <img src="https://img.shields.io/badge/phone-no%20app%20needed-85714D">
-  <img src="https://img.shields.io/badge/built%20with-Claude%20Code-6B6B6B">
+  <img src="https://img.shields.io/badge/fork-CmdSpace%20Pilot-121417">
 </p>
 
 ## 🎬 Demo
@@ -58,7 +58,7 @@ Open the URL on **any phone or tablet** and you get a full **trackpad + keyboard
   - → covers much of what a hardware **Stream Deck** does — on a device you already own, for free
 - 🔊 **System controls** — **volume** up / down / mute and **screen brightness**, right from the deck (with the native macOS HUD)
 - 🔁 **Deck synced across devices** — the Mac stores it, so iPhone & iPad share the same deck
-- 🎨 **Polished UI** — LG-inspired theme, **light / dark / system** toggle, adjustable sensitivity
+- 🎨 **Polished UI** — CmdSpace-themed light / dark / system toggle, sensitivity, network presets, and pointer frame-rate controls
 - 🛰️ **Always-on local server** — runs via `launchd`; auto-starts at login, auto-restarts. No Xcode needed after setup.
 - 🔒 **Local only** — everything stays on your Wi-Fi; nothing goes to the cloud.
 
@@ -94,7 +94,7 @@ open MacPilot.xcodeproj
 1. In Xcode → target **MacPilotHelper** → **Signing & Capabilities** → set **Team** to your Apple ID (a free account works).
 2. **Run** (▶). A 📡 icon appears in the menu bar.
 3. Click the menu-bar icon → **grant Accessibility** (System Settings → Privacy & Security → Accessibility → enable *MacPilot Helper*). Required for input injection — one time, persists.
-4. On your phone, open the **`http://<your-mac-name>.local:8765`** shown in the menu (or scan the QR).
+4. On your phone, open the **`http://<your-mac-name>.local:8766`** shown in the menu (or scan the QR).
 
 ### Run it as an always-on server (recommended)
 
@@ -103,6 +103,13 @@ open MacPilot.xcodeproj
 ```
 
 Builds a Release app into `~/Applications` and installs a **launchd LaunchAgent** so it starts at login and auto-restarts — **you never need to open Xcode again.** See **[SERVER.md](SERVER.md)** for management commands.
+
+```bash
+./script/macpilotctl.sh status
+./script/macpilotctl.sh stop
+./script/macpilotctl.sh start
+./script/macpilotctl.sh restart
+```
 
 ## Gesture reference
 
@@ -134,11 +141,11 @@ deploy.sh                 build → ~/Applications → launchd restart
 ## Security
 
 LAN-only and **unauthenticated by default** — anyone on the same Wi-Fi can connect.
-Keep it on a trusted home network and **do not expose port 8765 to the internet.**
+Keep it on a trusted home network and **do not expose port 8766 to the internet.**
 
 ## Credits & Attribution
 
-Made by **Park Joon (박준) — [JoonLab](https://github.com/joonlab)**, built end-to-end with **Claude Code**.
+CmdSpace Pilot is a branded fork of MacPilot. Original project by **Park Joon (박준) — [JoonLab](https://github.com/joonlab)**.
 
 If you **fork, modify, or redistribute** this project, please keep the credit and **link back to the original repo**:
 **https://github.com/joonlab/MacPilot** — the MIT license also requires retaining the copyright & license notice.

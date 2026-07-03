@@ -1,39 +1,85 @@
 #!/bin/bash
-# MacPilot 헬퍼를 Release 로 빌드해 ~/Applications 에 설치하고 LaunchAgent 를 재시작.
+# MacPilot 헬퍼를 Release 로 빌드해 ~/Applications 에 설치하고 LaunchAgent 를 (없으면 만들어서) 재시작.
 # 코드 수정 후 이 스크립트 한 번이면 상시 서버가 갱신된다. (Xcode 불필요)
 set -e
 cd "$(dirname "$0")"
 
-echo "▸ 프로젝트 생성 + Release 빌드(ad-hoc)…"
+APP_NAME="MacPilot Helper"
+LABEL="com.joonlab.macpilot.helper"
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+# 포트는 HelperServer.swift 의 상수에서 자동 감지 (이 머신은 8766 — 8765는 OmniControl 이 사용)
+PORT=$(sed -n 's/.*let port: UInt16 = \([0-9][0-9]*\).*/\1/p' MacHelper/Sources/HelperServer.swift)
+PORT=${PORT:-8765}
+
+echo "▸ 프로젝트 생성 + Release 빌드(서명 없이)…"
 xcodegen generate >/dev/null
 xcodebuild -project MacPilot.xcodeproj -scheme MacPilotHelper -configuration Release \
   -derivedDataPath ./.release CODE_SIGNING_ALLOWED=NO build >/dev/null
 
-# 키체인의 Apple Development 인증서로 재서명 → 고정 서명(손쉬운 사용 권한 유지).
-# (xcodebuild 자동서명은 CLI에서 계정 세션을 못 잡아 실패하므로 codesign 으로 직접 서명)
-# 인증서 조회가 가끔 깜빡이므로 재시도 + 결과 검증.
-APP_SRC="./.release/Build/Products/Release/MacPilot Helper.app"
-signed=0
+APP_SRC="./.release/Build/Products/Release/$APP_NAME.app"
+
+# 서명: 키체인에 Apple Development 인증서가 있으면 고정 서명(손쉬운 사용 권한이 재빌드 후에도 유지),
+# 없으면 ad-hoc 서명 — 동작은 하지만 재빌드 때마다 손쉬운 사용 권한을 다시 켜야 한다.
+# (인증서 조회가 가끔 깜빡이므로 재시도)
+CERT=""
 for attempt in 1 2 3 4; do
   CERT=$(security find-identity -v -p codesigning 2>/dev/null | grep "Apple Development" | head -1 | awk '{print $2}')
-  if [ -n "$CERT" ]; then
-    codesign --force --deep --sign "$CERT" "$APP_SRC" >/dev/null 2>&1
-    if codesign -dvv "$APP_SRC" 2>&1 | grep -q "Apple Development"; then
-      echo "▸ 인증서 재서명 OK ($CERT)"; signed=1; break
-    fi
-  fi
+  [ -n "$CERT" ] && break
   sleep 1
 done
-if [ "$signed" != "1" ]; then
-  echo "  ⚠️  재서명 실패 → ad-hoc. 수동: codesign --force --deep --sign <인증서> '$HOME/Applications/MacPilot Helper.app' 후 launchctl kickstart"
-  exit 1
+if [ -n "$CERT" ] && codesign --force --deep --sign "$CERT" "$APP_SRC" >/dev/null 2>&1 \
+   && codesign -dvv "$APP_SRC" 2>&1 | grep -q "Apple Development"; then
+  echo "▸ 인증서 재서명 OK ($CERT)"
+else
+  codesign --force --deep --sign - "$APP_SRC" >/dev/null 2>&1
+  echo "  ⚠️  Apple Development 인증서 없음 → ad-hoc 서명."
+  echo "     재빌드마다 손쉬운 사용 권한 재부여 필요: 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용 → '$APP_NAME' 껐다 켜기"
+  echo "     (Xcode 에 Apple ID 로그인해 인증서를 만들면 이 번거로움이 사라짐)"
 fi
 
 echo "▸ ~/Applications 갱신…"
-rm -rf "$HOME/Applications/MacPilot Helper.app"
-ditto "./.release/Build/Products/Release/MacPilot Helper.app" "$HOME/Applications/MacPilot Helper.app"
+rm -rf "$HOME/Applications/$APP_NAME.app"
+ditto "$APP_SRC" "$HOME/Applications/$APP_NAME.app"
+
+# LaunchAgent: plist 가 없으면 생성 (로그인 시 자동 시작 + 죽으면 자동 재시작)
+if [ ! -f "$PLIST" ]; then
+  echo "▸ LaunchAgent 생성…"
+  mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs/MacPilot"
+  cat > "$PLIST" <<PLISTEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$LABEL</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$HOME/Applications/$APP_NAME.app/Contents/MacOS/$APP_NAME</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <key>StandardOutPath</key>
+    <string>$HOME/Library/Logs/MacPilot/helper.log</string>
+    <key>StandardErrorPath</key>
+    <string>$HOME/Library/Logs/MacPilot/helper.log</string>
+</dict>
+</plist>
+PLISTEOF
+fi
 
 echo "▸ 서버 재시작…"
-launchctl kickstart -k "gui/$(id -u)/com.joonlab.macpilot.helper"
+# launchd 밖에서 직접 실행된 인스턴스가 있으면 종료 (포트 충돌 방지)
+pkill -f "$APP_NAME.app/Contents/MacOS" 2>/dev/null || true
+if launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1; then
+  launchctl kickstart -k "gui/$(id -u)/$LABEL"
+else
+  launchctl bootstrap "gui/$(id -u)" "$PLIST"
+fi
 
-echo "✅ 배포 완료 — http://$(scutil --get LocalHostName).local:8765"
+echo "✅ 배포 완료 — http://$(scutil --get LocalHostName).local:$PORT"

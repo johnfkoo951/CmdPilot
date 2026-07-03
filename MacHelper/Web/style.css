@@ -1,41 +1,41 @@
-/* ───────── LG 브랜드 테마 변수 ───────── */
+/* ───────── CmdSpace native-control theme ───────── */
 :root, [data-theme="dark"] {
-  --bg: #141416;
-  --surface: #1f1f23;
-  --surface-2: #2a2a2f;
-  --surface-3: #34343b;
-  --text: #f0f0f1;
-  --text-dim: #8A8D8F;     /* Premium Silver */
-  --text-mute: #6B6B6B;    /* Neutral Gray */
-  --border: #2e2e34;
-  --accent: #A50034;        /* LG Red */
-  --accent-press: #c30a44;
-  --accent-text: #ffffff;
-  --gold: #85714D;          /* Highlight Gold */
-  --silver: #8A8D8F;
-  --macro-bg: #2a2520;
-  --ok: #3aa856;
-  --warn: #c79a3a;
+  --bg: #0f1115;
+  --surface: #181b22;
+  --surface-2: #232832;
+  --surface-3: #303744;
+  --text: #f4f6f8;
+  --text-dim: #a7afb9;
+  --text-mute: #727b88;
+  --border: #2d3440;
+  --accent: #63e6be;
+  --accent-press: #7aa2ff;
+  --accent-text: #07110f;
+  --gold: #d6b76e;
+  --silver: #9ba4b0;
+  --macro-bg: #20251f;
+  --ok: #54d68a;
+  --warn: #d6a94f;
   --logo-bg: #f0f0f1;
   --shadow: rgba(0,0,0,.5);
 }
 [data-theme="light"] {
-  --bg: #f2f2f4;
+  --bg: #f6f7f8;
   --surface: #ffffff;
-  --surface-2: #ececed;
-  --surface-3: #dededf;
-  --text: #1b1b1d;
-  --text-dim: #6B6B6B;
-  --text-mute: #8A8D8F;
-  --border: #e2e2e5;
-  --accent: #A50034;
-  --accent-press: #87002b;
+  --surface-2: #ebeff3;
+  --surface-3: #dce3ea;
+  --text: #121417;
+  --text-dim: #4f5965;
+  --text-mute: #77818d;
+  --border: #dde4ec;
+  --accent: #087f68;
+  --accent-press: #1a65d8;
   --accent-text: #ffffff;
-  --gold: #85714D;
-  --silver: #8A8D8F;
-  --macro-bg: #f4efe6;
-  --ok: #2e8b46;
-  --warn: #b07d1e;
+  --gold: #8a6a21;
+  --silver: #7b8490;
+  --macro-bg: #f1f6ef;
+  --ok: #268550;
+  --warn: #9a6b1b;
   --logo-bg: transparent;
   --shadow: rgba(0,0,0,.16);
 }
@@ -180,7 +180,10 @@ textarea.ed-input { min-height: 80px; resize: none; }
 .set-val { color: var(--accent); font-size: 13px; font-variant-numeric: tabular-nums; }
 .set-slider { width: 100%; margin: 0 0 4px; accent-color: var(--accent); height: 28px; }
 #set-scrolldir { width: 24px; height: 24px; accent-color: var(--accent); }
-.set-section { font-size: 12px; color: var(--text-mute); margin: 18px 2px 8px; text-transform: uppercase; letter-spacing: .04em; }
+.set-section { font-size: 12px; color: var(--text-mute); margin: 18px 2px 8px; text-transform: uppercase; letter-spacing: 0; }
+.net-presets button { font-size: 12px; }
+.latency-card { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-dim); font-size: 13px; margin-bottom: 6px; }
+.latency-card b { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 14px; }
 
 /* About / 저작권 */
 .about { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 24px 0 6px; }
