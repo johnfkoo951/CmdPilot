@@ -25,7 +25,8 @@ final class HelperServer: ObservableObject {
     let launchAgentLabel = "com.joonlab.macpilot.helper"
 
     private var listener: NWListener?
-    private var listener80: NWListener?   // 짧은 주소용 :80 보조 리스너 (선택)
+    private var listener80: NWListener?    // 짧은 주소용 :80 보조 리스너 (선택)
+    private var listener443: NWListener?   // HTTPS :443 (tls/pilot.p12 있을 때)
     private var connections: [ObjectIdentifier: HTTPWebSocketConnection] = [:]
     private var upgradedKeys: Set<ObjectIdentifier> = []
     private var accessibilityTimer: Timer?
@@ -132,6 +133,56 @@ final class HelperServer: ObservableObject {
                 listener80 = aux
             }
         }
+
+        // HTTPS(:443) — `App Support/MacPilot/tls/pilot.p12` 인증서가 있으면 켠다.
+        // (acme.sh 가 Let's Encrypt 인증서를 발급/갱신해 p12 로 떨궈줌 — 갱신 훅이 헬퍼 재시작)
+        // iOS 모션 센서(에어마우스) 등 보안 컨텍스트 필수 기능이 이 주소에서 동작한다.
+        if let tls = HelperServer.loadTLSOptions(), let port443 = NWEndpoint.Port(rawValue: 443) {
+            let tcp = NWProtocolTCP.Options()
+            tcp.noDelay = true
+            let params = NWParameters(tls: tls, tcp: tcp)
+            params.serviceClass = .responsiveData
+            if let aux = try? NWListener(using: params, on: port443) {
+                aux.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
+                aux.start(queue: .global(qos: .userInitiated))
+                listener443 = aux
+            }
+        }
+    }
+
+    /// tls/pilot.p12 에서 서버 인증서(identity)를 읽는다. 없거나 손상이면 nil → HTTPS 비활성.
+    private static func loadTLSOptions() -> NWProtocolTLS.Options? {
+        let p12URL = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("MacPilot/tls/pilot.p12")
+        guard let data = try? Data(contentsOf: p12URL) else { return nil }
+
+        var items: CFArray?
+        let options = [kSecImportExportPassphrase as String: "macpilot"] as CFDictionary
+        let status = SecPKCS12Import(data as CFData, options, &items)
+
+        var identity: SecIdentity?
+        if status == errSecSuccess,
+           let first = (items as? [[String: Any]])?.first,
+           let raw = first[kSecImportItemIdentity as String] {
+            identity = (raw as! SecIdentity)
+        } else if status == errSecDuplicateItem {
+            // 이미 키체인에 들어간 경우 → 라벨로 조회
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassIdentity,
+                kSecAttrLabel as String: "pilot.cmdspace.work",
+                kSecReturnRef as String: true,
+            ]
+            var result: CFTypeRef?
+            if SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess {
+                identity = (result as! SecIdentity)
+            }
+        }
+        guard let identity, let secIdentity = sec_identity_create(identity) else { return nil }
+
+        let tls = NWProtocolTLS.Options()
+        sec_protocol_options_set_local_identity(tls.securityProtocolOptions, secIdentity)
+        return tls
     }
 
     private func accept(_ connection: NWConnection) {
@@ -263,6 +314,8 @@ final class HelperServer: ObservableObject {
         listener = nil
         listener80?.cancel()
         listener80 = nil
+        listener443?.cancel()
+        listener443 = nil
         serverQueue.async { [weak self] in
             guard let self else { return }
             self.connections.values.forEach { $0.close() }
