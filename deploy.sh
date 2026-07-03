@@ -23,12 +23,12 @@ APP_SRC="./.release/Build/Products/Release/$APP_NAME.app"
 # (인증서 조회가 가끔 깜빡이므로 재시도)
 CERT=""
 for attempt in 1 2 3 4; do
-  CERT=$(security find-identity -v -p codesigning 2>/dev/null | grep "Apple Development" | head -1 | awk '{print $2}')
+  CERT=$(security find-identity -v -p codesigning 2>/dev/null | grep -E "Apple Development|CmdSpace Local Signing" | head -1 | awk '{print $2}')
   [ -n "$CERT" ] && break
   sleep 1
 done
 if [ -n "$CERT" ] && codesign --force --deep --sign "$CERT" "$APP_SRC" >/dev/null 2>&1 \
-   && codesign -dvv "$APP_SRC" 2>&1 | grep -q "Apple Development"; then
+   && codesign -dvv "$APP_SRC" 2>&1 | grep -qE "Apple Development|CmdSpace Local Signing"; then
   echo "▸ 인증서 재서명 OK ($CERT)"
 else
   codesign --force --deep --sign - "$APP_SRC" >/dev/null 2>&1

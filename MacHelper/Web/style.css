@@ -66,7 +66,8 @@ body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; hei
 .gear .icn { width: 21px; height: 21px; }
 
 main { flex: 1; min-height: 0; position: relative; overflow: hidden; }
-.panel { position: absolute; inset: 0; display: none; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+/* 하단 58px = 트랙패드 핸들(46px)+여백 — 핸들이 패널 마지막 줄(⏎ 버튼 등)을 덮지 않도록 */
+.panel { position: absolute; inset: 0; display: none; flex-direction: column; gap: 10px; padding: 0 12px 58px; }
 .panel.active { display: flex; }
 
 /* 트랙패드 시트 */
@@ -95,7 +96,8 @@ main { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 .kb-special { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
 .kb-special .sp { padding: 12px 0; background: var(--surface-2); color: var(--text); border: none; border-radius: 10px; font-size: 15px; }
 .kb-special .sp:active { background: var(--surface-3); }
-#kb-input { flex: 1; min-height: 110px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 14px; padding: 14px; font-size: 17px; line-height: 1.5; resize: none; -webkit-user-select: text; user-select: text; }
+#kb-input { flex: 1; min-height: 80px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 14px; padding: 14px; font-size: 17px; line-height: 1.5; resize: none; -webkit-user-select: text; user-select: text; }
+.kb-mods { padding-top: 10px; }
 #kb-input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
 .kb-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .kb-quick { display: flex; gap: 6px; flex: 1; }
