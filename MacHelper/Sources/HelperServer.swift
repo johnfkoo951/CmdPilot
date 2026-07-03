@@ -101,6 +101,12 @@ final class HelperServer: ObservableObject {
                     client?.sendText("{\"t\":\"apps\",\"list\":\(AppList.json())}")
                 }
                 return
+            case "cmux":
+                // cmux 창/워크스페이스/탭 원격 전환 (CmuxBridge 가 화이트리스트 검증)
+                CmuxBridge.handle(command) { [weak client] json in
+                    client?.sendText(json)
+                }
+                return
             default:
                 break
             }

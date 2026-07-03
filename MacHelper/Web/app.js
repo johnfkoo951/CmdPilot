@@ -28,6 +28,9 @@
         } else if (m.t === "apps") {
           installedApps = m.list || [];
           if (appsPickerRefresh) appsPickerRefresh();
+        } else if (m.t === "cmux") {
+          cmuxState = m;
+          renderCmux();
         } else if (m.t === "pong") {
           const sent = pendingPings.get(m.id);
           if (sent) {
@@ -302,6 +305,7 @@
       document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "panel-" + name));
       if (name === "keyboard") setTimeout(() => kb.focus(), 50); else kb.blur();
       if (name === "deck") renderDeck();
+      if (name === "agent") requestCmux();   // 에이전트 탭 열 때 cmux 상태 갱신
     });
   });
 
@@ -455,6 +459,55 @@
   document.querySelectorAll("#panel-agent .agent-btn, #quickbar button").forEach((b) => {
     b.addEventListener("click", () => runQuickAction(b));
   });
+
+  // ═════════ cmux 원격 (창 / 워크스페이스 / 탭 전환) ═════════
+  let cmuxState = null;
+  function requestCmux(verb, target) { send({ t: "cmux", dir: verb || "state", target: target || "" }); }
+  function cmuxChip(label, on, color, handler) {
+    const b = document.createElement("button");
+    b.className = "cmux-chip" + (on ? " on" : "");
+    if (color && !on) b.style.borderColor = color;
+    b.textContent = label;
+    b.addEventListener("click", () => { buzz(); handler(); });
+    return b;
+  }
+  function renderCmux() {
+    const root = document.getElementById("cmux-remote");
+    if (!root) return;
+    if (!cmuxState) { root.innerHTML = '<div class="cmux-empty">cmux 상태 불러오는 중…</div>'; return; }
+    if (cmuxState.available === false) { root.innerHTML = '<div class="cmux-empty">cmux가 설치되어 있지 않습니다</div>'; return; }
+    if (cmuxState.denied) { root.innerHTML = '<div class="cmux-empty">cmux 소켓 권한 대기 중 — cmux를 한 번 재시작하면 활성화됩니다 (↻로 재확인)</div>'; return; }
+    root.innerHTML = "";
+    (cmuxState.windows || []).forEach((win) => {
+      const row = document.createElement("div");
+      row.className = "cmux-row";
+      const wbtn = cmuxChip("창 " + ((win.index || 0) + 1), !!win.key, "", () => requestCmux("focus-window", win.id));
+      wbtn.classList.add("win");
+      row.appendChild(wbtn);
+      const wrap = document.createElement("div");
+      wrap.className = "cmux-chips";
+      (win.workspaces || []).forEach((ws) => {
+        wrap.appendChild(cmuxChip(ws.title || "(무제)", !!ws.selected, ws.color || "", () => requestCmux("select-workspace", ws.id)));
+      });
+      row.appendChild(wrap);
+      root.appendChild(row);
+    });
+    if (cmuxState.tabs && cmuxState.tabs.length) {
+      const lbl = document.createElement("div");
+      lbl.className = "cmux-sub";
+      lbl.textContent = "탭 (현재 워크스페이스)";
+      root.appendChild(lbl);
+      const wrap = document.createElement("div");
+      wrap.className = "cmux-chips";
+      cmuxState.tabs.forEach((tb) => {
+        const chip = cmuxChip(tb.title || "터미널", !!tb.focused, "", () => requestCmux("focus-tab", tb.id));
+        chip.classList.add("tab");
+        wrap.appendChild(chip);
+      });
+      root.appendChild(wrap);
+    }
+  }
+  document.getElementById("cmux-refresh").addEventListener("click", () => { buzz(); requestCmux(); });
 
   // ═════════ 덱 ═════════
   const STORE_KEY = "macpilot.deck.v2";

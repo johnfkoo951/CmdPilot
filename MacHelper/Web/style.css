@@ -135,6 +135,18 @@ main { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 /* 에이전트 (cmux · Claude Code 원격) */
 #panel-agent { overflow-y: auto; }
 .agent-sec { font-size: 12px; color: var(--text-mute); margin: 14px 2px 0; }
+.cmux-head { display: flex; align-items: center; justify-content: space-between; }
+.cmux-head button { background: var(--surface-2); color: var(--text-dim); border: none; border-radius: 8px; padding: 5px 11px; font-size: 14px; }
+.cmux-head button:active { background: var(--accent); color: var(--accent-text); }
+.cmux-remote { display: flex; flex-direction: column; gap: 8px; }
+.cmux-row { display: flex; gap: 6px; align-items: flex-start; }
+.cmux-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
+.cmux-chip { padding: 7px 11px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 9px; font-size: 12px; max-width: 47%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmux-chip.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+.cmux-chip.win { flex: 0 0 auto; background: var(--surface-2); }
+.cmux-chip.tab { max-width: 100%; }
+.cmux-sub { font-size: 11px; color: var(--text-mute); }
+.cmux-empty { font-size: 12px; color: var(--text-mute); padding: 6px 0; }
 .agent-grid { display: grid; gap: 8px; }
 .agent-grid.g3 { grid-template-columns: repeat(3, 1fr); }
 .agent-grid.g5 { grid-template-columns: repeat(5, 1fr); }
