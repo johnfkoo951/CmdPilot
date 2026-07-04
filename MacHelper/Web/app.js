@@ -406,45 +406,106 @@
 
   // ═════════ 에어마우스 (자이로) ═════════
   // ✈ 버튼을 누르고 있는 동안 폰의 회전 속도(rotationRate)로 커서를 움직인다 —
-  // 폰을 리모컨처럼 들고 좌우로 돌리면 좌우, 위아래로 기울이면 상하.
-  // ⚠️ iOS 는 모션 센서를 HTTPS(보안 컨텍스트)에서만 허용 → http 접속이면 안내만 띄운다.
+  // 폰을 리모컨처럼 들고 좌우로 돌리면 좌우, 위아래로 기울이면 상하. (이동이 아니라 '회전'에 반응)
+  // ⚠️ iOS 는 모션 센서를 HTTPS(보안 컨텍스트)에서만 허용.
+  // 조용한 실패 금지: 센서 이벤트가 1.2초 안에 안 오면 원인을 화면에 알려준다.
   const airBtn = document.getElementById("air-btn");
-  let airActive = false, airListening = false;
+  let airActive = false, airListening = false, airLastEvent = 0, airCheckTimer = null;
+  let airPrevOrient = null;
+
+  function airSensK() { return clampNum(settings.airSensitivity || 1.2, 0.3, 3) * 0.3; }
+  function airStatus(txt) { const s = airBtn && airBtn.querySelector("span"); if (s) s.textContent = txt; }
+
   function onAirMotion(e) {
-    if (!airActive || !e.rotationRate) return;
-    const rr = e.rotationRate;                                // deg/s
-    const k = clampNum(settings.airSensitivity || 1.2, 0.3, 3) * 0.3;
-    const dx = Math.abs(rr.alpha || 0) < 3 ? 0 : -(rr.alpha || 0) * k;   // 데드존 3°/s (손떨림)
-    const dy = Math.abs(rr.beta || 0) < 3 ? 0 : -(rr.beta || 0) * k;
+    const rr = e.rotationRate;
+    if (!rr || (rr.alpha == null && rr.beta == null)) return;
+    airLastEvent = performance.now();
+    if (!airActive) return;
+    const k = airSensK();                                     // deg/s → px
+    const dx = Math.abs(rr.alpha || 0) < 2 ? 0 : -(rr.alpha || 0) * k;   // 데드존 2°/s (손떨림)
+    const dy = Math.abs(rr.beta || 0) < 2 ? 0 : -(rr.beta || 0) * k;
     if (dx || dy) queueMove(dx, dy);
   }
+
+  // 회전속도(motion)가 안 오는 환경 폴백: 방향(절대각)의 변화량으로 이동
+  function onAirOrient(e) {
+    if (performance.now() - airLastEvent < 500) return;       // 모션이 살아있으면 무시
+    if (e.alpha == null && e.beta == null) return;
+    if (!airActive) { airPrevOrient = null; return; }
+    const cur = { a: e.alpha || 0, b: e.beta || 0 };
+    if (airPrevOrient) {
+      let da = cur.a - airPrevOrient.a;
+      if (da > 180) da -= 360;
+      if (da < -180) da += 360;                               // 0/360 경계 보정
+      const db = cur.b - airPrevOrient.b;
+      const k = airSensK() * 12;                              // 각도 적분값이라 계수 큼
+      const dx = Math.abs(da) < 0.15 ? 0 : -da * k;
+      const dy = Math.abs(db) < 0.15 ? 0 : -db * k;
+      if (dx || dy) queueMove(dx, dy);
+    }
+    airPrevOrient = cur;
+  }
+
+  async function airRequestPermissions() {
+    // iOS 13+: 모션/방향 권한이 분리 — 둘 다 요청 (사용자 제스처 안에서만 가능)
+    for (const Ev of [window.DeviceMotionEvent, window.DeviceOrientationEvent]) {
+      if (Ev && typeof Ev.requestPermission === "function") {
+        try { if ((await Ev.requestPermission()) !== "granted") return false; }
+        catch (err) { return false; }
+      }
+    }
+    return true;
+  }
+
   async function airStart() {
-    if (typeof DeviceMotionEvent === "undefined") {
+    const needsPerm = typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function";
+    if (!window.isSecureContext && needsPerm) {
+      alert("iOS는 http 접속에서 모션 센서를 차단합니다.\n\nhttps://pilot.cmdspace.work 로 접속하면 에어마우스가 동작해요.\n(홈 화면 아이콘도 https 주소로 다시 추가 권장)");
+      return;
+    }
+    if (typeof DeviceMotionEvent === "undefined" && typeof DeviceOrientationEvent === "undefined") {
       alert("이 브라우저는 모션 센서를 지원하지 않습니다."); return;
     }
     if (!airListening) {
-      if (typeof DeviceMotionEvent.requestPermission === "function") {
-        try {
-          const res = await DeviceMotionEvent.requestPermission();
-          if (res !== "granted") return;
-        } catch (err) {
-          alert("에어마우스는 HTTPS 접속에서만 동작합니다.\nTailscale HTTPS 주소(https://<맥이름>.<테일넷>.ts.net)로 접속해 주세요.");
-          return;
-        }
+      const granted = await airRequestPermissions();
+      if (!granted) {
+        alert("모션 권한이 거부되었습니다.\n페이지를 완전히 닫았다 다시 열고 ✈ 버튼을 눌러 '허용'을 선택해 주세요.");
+        return;
       }
       window.addEventListener("devicemotion", onAirMotion);
+      window.addEventListener("deviceorientation", onAirOrient);
       airListening = true;
     }
     airActive = true;
+    airPrevOrient = null;
     buzz();
     airBtn.classList.add("held");
+    airStatus("대기…");
+    // 1.2초 안에 센서 이벤트가 안 오면 원인 안내 (조용한 실패 방지)
+    clearTimeout(airCheckTimer);
+    const t0 = performance.now();
+    airCheckTimer = setTimeout(() => {
+      if (!airActive) return;
+      if (airLastEvent < t0) {
+        airStop();
+        alert("센서 이벤트가 오지 않습니다.\n\n현재 주소: " + location.protocol + "//" + location.host +
+              "\n- https://pilot.cmdspace.work 인지 확인\n- 첫 사용 시 뜨는 '동작 및 방향' 팝업에서 허용했는지 확인");
+      } else {
+        airStatus("작동중");
+      }
+    }, 1200);
   }
+
   function airStop() {
     if (!airActive) return;
     airActive = false;
+    airPrevOrient = null;
     airBtn.classList.remove("held");
+    airStatus("에어");
+    clearTimeout(airCheckTimer);
     flushMotion(true);
   }
+
   if (airBtn) {
     airBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); airStart(); });
     airBtn.addEventListener("pointerup", airStop);
