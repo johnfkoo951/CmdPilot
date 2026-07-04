@@ -454,9 +454,13 @@
       : (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function")
         ? DeviceOrientationEvent
         : null;
-    if (!Ev) return true;   // Android 등 권한 개념 없는 플랫폼
-    try { return (await Ev.requestPermission()) === "granted"; }
-    catch (err) { return false; }
+    if (!Ev) return { ok: true, detail: "no-perm-api" };   // Android 등 권한 개념 없는 플랫폼
+    try {
+      const res = await Ev.requestPermission();
+      return { ok: res === "granted", detail: "result=" + res };
+    } catch (err) {
+      return { ok: false, detail: "throw=" + ((err && err.message) || String(err)) };
+    }
   }
 
   async function airStart() {
@@ -469,18 +473,20 @@
       alert("이 브라우저는 모션 센서를 지원하지 않습니다."); return;
     }
     if (!airListening) {
-      const granted = await airRequestPermissions();
-      if (!granted) {
-        // 팝업 없이 즉시 거부 = iOS 전역 모션 설정 OFF 가 가장 흔한 원인.
+      const perm = await airRequestPermissions();
+      if (!perm.ok) {
         airBtn.classList.remove("held");
         airStatus("에어");
+        // iOS 17+/27 은 전역 토글을 없애고 '사이트별 권한'으로 바꿈 → 주소창 왼쪽 메뉴에서 해제.
         alert(
-          "에어마우스에 필요한 모션 센서가 꺼져 있어요.\n\n" +
-          "① 먼저 iOS 전역 설정을 켜세요 (가장 흔한 원인):\n" +
-          "설정(Settings) → 앱(Apps) → Safari → 동작 및 방향 접근(Motion & Orientation Access) → 켜기(ON)\n" +
-          "(구형 iOS는 설정(Settings) → Safari 안에 바로 있어요)\n" +
-          "→ 켠 뒤 이 페이지 새로고침 후 🛸 에어 다시 누르기\n\n" +
-          "② 그래도 안 뜨면 사생활 보호(Private) 탭으로 이 주소를 열고 🛸 → 허용(Allow)"
+          "모션 센서 권한을 얻지 못했어요.\n\n" +
+          "iOS 17 이상은 사이트별 권한이라, 주소창에서 풀어야 합니다:\n" +
+          "① 주소창 왼쪽의 메뉴 아이콘(≡ 또는 ⊞) 탭\n" +
+          "② 웹 사이트 설정(Website Settings) 선택\n" +
+          "③ 동작 및 방향(Motion & Orientation)을 허용(Allow)으로\n" +
+          "→ 페이지 새로고침 후 🛸 에어 다시 누르기\n\n" +
+          "안 보이면: 사생활 보호(Private) 탭으로 이 주소를 열고 🛸 → 팝업에서 허용(Allow)\n\n" +
+          "[진단] " + location.protocol + " secure=" + window.isSecureContext + " / " + perm.detail
         );
         return;
       }
