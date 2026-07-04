@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import ScreenCaptureKit
 import Vision
 
 /// 양방향 캡처.
@@ -11,47 +12,56 @@ enum CaptureService {
 
     // MARK: - 맥 화면 → 폰
 
-    static func captureScreen(reply: @escaping (String) -> Void) {
-        queue.async {
-            // 화면 기록 권한이 없으면 시스템 프롬프트 유도 (1회)
-            if !CGPreflightScreenCaptureAccess() {
-                CGRequestScreenCaptureAccess()
-            }
-            let tmp = NSTemporaryDirectory() + "macpilot-capture-\(UUID().uuidString).jpg"
-            defer { try? FileManager.default.removeItem(atPath: tmp) }
+    /// 화면 기록 권한 상태 (헬퍼 프로세스 기준). 폰 UI 진단용으로도 노출.
+    static var screenAccessGranted: Bool { CGPreflightScreenCaptureAccess() }
 
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-            process.arguments = ["-x", "-t", "jpg", tmp]   // -x: 무음
-            do { try process.run() } catch {
-                reply(#"{"t":"capture","error":"screencapture 실행 실패"}"#); return
+    static func captureScreen(reply: @escaping (String) -> Void) {
+        guard #available(macOS 14.0, *) else {
+            reply(#"{"t":"capture","error":"화면 가져오기는 macOS 14 이상에서 지원됩니다"}"#); return
+        }
+        // ScreenCaptureKit: 권한 없으면 SCShareableContent 가 에러를 던지며,
+        // 그 과정에서 시스템이 화면 기록 권한 프롬프트를 띄운다.
+        Task {
+            do {
+                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+                let targetID = currentDisplayID()
+                guard let display = content.displays.first(where: { $0.displayID == targetID })
+                        ?? content.displays.first else {
+                    reply(#"{"t":"capture","error":"디스플레이를 찾지 못했습니다"}"#); return
+                }
+                let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
+                let config = SCStreamConfiguration()
+                // 폰 전송용으로 긴 변 1800px 로 축소 캡처
+                let scale = min(1.0, 1800.0 / Double(max(display.width, display.height)))
+                config.width = Int(Double(display.width) * scale)
+                config.height = Int(Double(display.height) * scale)
+                config.showsCursor = true
+
+                let cgImage = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+                guard let jpeg = jpeg(cgImage) else {
+                    reply(#"{"t":"capture","error":"이미지 인코딩 실패"}"#); return
+                }
+                reply("{\"t\":\"capture\",\"data\":\"\(jpeg.base64EncodedString())\"}")
+            } catch {
+                reply(#"{"t":"capture","error":"화면 기록 권한이 필요합니다. 맥에 뜬 창에서 허용(Allow) 후, 설정(Settings) → 개인정보 보호 및 보안(Privacy & Security) → 화면 및 시스템 오디오 기록(Screen & System Audio Recording)에서 MacPilot Helper를 켜고 다시 시도하세요."}"#)
             }
-            process.waitUntilExit()
-            guard process.terminationStatus == 0,
-                  let data = try? Data(contentsOf: URL(fileURLWithPath: tmp)) else {
-                reply(#"{"t":"capture","error":"권한 없음 또는 캡처 실패"}"#); return
-            }
-            // 레티나 원본은 수 MB → 폰 전송용으로 긴 변 1800px, JPEG 0.7 다운스케일
-            let jpeg = downscaleJPEG(data, maxDim: 1800) ?? data
-            reply("{\"t\":\"capture\",\"data\":\"\(jpeg.base64EncodedString())\"}")
         }
     }
 
-    private static func downscaleJPEG(_ data: Data, maxDim: CGFloat) -> Data? {
-        guard let image = NSImage(data: data) else { return nil }
-        let size = image.size
-        let scale = min(1, maxDim / max(size.width, size.height))
-        let target = NSSize(width: max(size.width * scale, 1), height: max(size.height * scale, 1))
-        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil,
-                                         pixelsWide: Int(target.width), pixelsHigh: Int(target.height),
-                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
-        else { return nil }
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-        image.draw(in: NSRect(origin: .zero, size: target))
-        NSGraphicsContext.restoreGraphicsState()
-        return rep.representation(using: .jpeg, properties: [.compressionFactor: 0.7])
+    /// 마우스 커서가 위치한 디스플레이 ID (없으면 메인)
+    private static func currentDisplayID() -> CGDirectDisplayID {
+        let mouse = NSEvent.mouseLocation
+        if let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }),
+           let num = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
+            return CGDirectDisplayID(num.uint32Value)
+        }
+        return CGMainDisplayID()
+    }
+
+    /// CGImage → JPEG(0.72). (크기 축소는 캡처 단계에서 이미 처리)
+    private static func jpeg(_ cgImage: CGImage) -> Data? {
+        let rep = NSBitmapImageRep(cgImage: cgImage)
+        return rep.representation(using: .jpeg, properties: [.compressionFactor: 0.72])
     }
 
     // MARK: - 폰 카메라 → OCR → 맥 클립보드
