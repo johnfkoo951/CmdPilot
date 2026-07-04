@@ -447,14 +447,16 @@
   }
 
   async function airRequestPermissions() {
-    // iOS 13+: 모션/방향 권한이 분리 — 둘 다 요청 (사용자 제스처 안에서만 가능)
-    for (const Ev of [window.DeviceMotionEvent, window.DeviceOrientationEvent]) {
-      if (Ev && typeof Ev.requestPermission === "function") {
-        try { if ((await Ev.requestPermission()) !== "granted") return false; }
-        catch (err) { return false; }
-      }
-    }
-    return true;
+    // iOS의 '동작 및 방향'은 모션/방향 공용 권한 — 한 번만 요청해야 한다.
+    // (연속 두 번 요청하면 두 번째가 사용자 제스처 밖으로 판정돼 자동 거부됨)
+    const Ev = (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function")
+      ? DeviceMotionEvent
+      : (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function")
+        ? DeviceOrientationEvent
+        : null;
+    if (!Ev) return true;   // Android 등 권한 개념 없는 플랫폼
+    try { return (await Ev.requestPermission()) === "granted"; }
+    catch (err) { return false; }
   }
 
   async function airStart() {
@@ -469,7 +471,7 @@
     if (!airListening) {
       const granted = await airRequestPermissions();
       if (!granted) {
-        alert("모션 권한이 거부되었습니다.\n페이지를 완전히 닫았다 다시 열고 ✈ 버튼을 눌러 '허용'을 선택해 주세요.");
+        alert("모션 권한이 거부된 상태입니다. 복구 방법:\n\n① Safari 탭을 완전히 닫고(탭 목록에서 위로 스와이프) 새로 연 뒤 ✈를 다시 누르기\n② 그래도 팝업 없이 거부되면: iOS 설정 → Safari → '동작 및 방향 접근' 켜기\n③ 홈 화면 앱이면: 앱 스위처에서 완전히 종료 후 재실행");
         return;
       }
       window.addEventListener("devicemotion", onAirMotion);
