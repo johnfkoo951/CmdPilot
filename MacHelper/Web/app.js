@@ -471,7 +471,7 @@
     if (!airListening) {
       const granted = await airRequestPermissions();
       if (!granted) {
-        alert("모션 권한이 거부된 상태로 저장되어 있습니다. 복구:\n\n① 빠른 확인: 사생활 보호(Private) 탭으로 이 주소를 열고 ✈ → 팝업에서 허용(Allow)\n\n② 일반 탭 복구: 설정(Settings) → 앱(Apps) → Safari → 고급(Advanced) → 웹 사이트 데이터(Website Data) → 'pilot' 검색 → 삭제 → 사이트 재접속 후 ✈\n\n③ 홈 화면 앱이면: 앱 스위처에서 완전 종료 후 재실행");
+        alert("모션 권한이 거부된 상태로 저장되어 있습니다. 복구:\n\n① 빠른 확인: 사생활 보호(Private) 탭으로 이 주소를 열고 🛸 에어 버튼 탭 → 팝업에서 허용(Allow)\n\n② 일반 탭 복구: 설정(Settings) → 앱(Apps) → Safari → 고급(Advanced) → 웹 사이트 데이터(Website Data) → 'pilot' 검색 → 삭제 → 사이트 재접속 후 🛸 에어 버튼 탭\n\n③ 홈 화면 앱이면: 앱 스위처에서 완전 종료 후 재실행");
         return;
       }
       window.addEventListener("devicemotion", onAirMotion);
