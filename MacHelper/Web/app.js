@@ -471,7 +471,7 @@
     if (!airListening) {
       const granted = await airRequestPermissions();
       if (!granted) {
-        alert("모션 권한이 거부된 상태입니다. 복구 방법:\n\n① Safari 탭을 완전히 닫고(탭 목록에서 위로 스와이프) 새로 연 뒤 ✈를 다시 누르기\n② 그래도 팝업 없이 거부되면: iOS 설정 → Safari → '동작 및 방향 접근' 켜기\n③ 홈 화면 앱이면: 앱 스위처에서 완전히 종료 후 재실행");
+        alert("모션 권한이 거부된 상태로 저장되어 있습니다. 복구:\n\n① 빠른 확인: 사생활 보호(Private) 탭으로 이 주소를 열고 ✈ → 팝업에서 허용(Allow)\n\n② 일반 탭 복구: 설정(Settings) → 앱(Apps) → Safari → 고급(Advanced) → 웹 사이트 데이터(Website Data) → 'pilot' 검색 → 삭제 → 사이트 재접속 후 ✈\n\n③ 홈 화면 앱이면: 앱 스위처에서 완전 종료 후 재실행");
         return;
       }
       window.addEventListener("devicemotion", onAirMotion);
