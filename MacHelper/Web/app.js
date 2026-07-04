@@ -471,7 +471,17 @@
     if (!airListening) {
       const granted = await airRequestPermissions();
       if (!granted) {
-        alert("모션 권한이 거부된 상태로 저장되어 있습니다. 복구:\n\n① 빠른 확인: 사생활 보호(Private) 탭으로 이 주소를 열고 🛸 에어 버튼 탭 → 팝업에서 허용(Allow)\n\n② 일반 탭 복구: 설정(Settings) → 앱(Apps) → Safari → 고급(Advanced) → 웹 사이트 데이터(Website Data) → 'pilot' 검색 → 삭제 → 사이트 재접속 후 🛸 에어 버튼 탭\n\n③ 홈 화면 앱이면: 앱 스위처에서 완전 종료 후 재실행");
+        // 팝업 없이 즉시 거부 = iOS 전역 모션 설정 OFF 가 가장 흔한 원인.
+        airBtn.classList.remove("held");
+        airStatus("에어");
+        alert(
+          "에어마우스에 필요한 모션 센서가 꺼져 있어요.\n\n" +
+          "① 먼저 iOS 전역 설정을 켜세요 (가장 흔한 원인):\n" +
+          "설정(Settings) → 앱(Apps) → Safari → 동작 및 방향 접근(Motion & Orientation Access) → 켜기(ON)\n" +
+          "(구형 iOS는 설정(Settings) → Safari 안에 바로 있어요)\n" +
+          "→ 켠 뒤 이 페이지 새로고침 후 🛸 에어 다시 누르기\n\n" +
+          "② 그래도 안 뜨면 사생활 보호(Private) 탭으로 이 주소를 열고 🛸 → 허용(Allow)"
+        );
         return;
       }
       window.addEventListener("devicemotion", onAirMotion);
