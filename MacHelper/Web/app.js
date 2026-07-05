@@ -601,7 +601,7 @@
       openCaptureMenu();
     }
   }
-  document.querySelectorAll("#panel-agent .agent-btn, #quickbar button").forEach((b) => {
+  document.querySelectorAll("#panel-agent .agent-btn, #quickbar button, #quickbar2 button").forEach((b) => {
     b.addEventListener("click", () => runQuickAction(b));
   });
 

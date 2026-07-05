@@ -47,6 +47,8 @@ final class HelperServer: ObservableObject {
         }
         // 앱 목록(아이콘 렌더)을 시작 직후 1회 미리 빌드→캐시. 이후 getApps 는 메인 블록 없이 즉시 응답.
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { _ = AppList.json() }
+        // cmux 소켓 인증을 미리 맞춰둔다(재시작으로 지워졌으면 복구) → 첫 에이전트 탭 요청이 바로 됨
+        CmuxBridge.warmUp()
         // 페어링 상태를 UI 로 미러
         pairingEnabled = pairing.enabled
         pairingPin = pairing.pin
