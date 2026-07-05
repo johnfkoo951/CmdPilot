@@ -597,6 +597,8 @@
       ] });
     } else if (act === "launch") {
       send({ t: "launch", target: b.dataset.target || "" });
+    } else if (act === "window") {
+      send({ t: "window", dir: b.dataset.dir || "next" });   // AX 직접 창 전환(키 입력 없음)
     } else if (act === "capmenu") {
       openCaptureMenu();
     }

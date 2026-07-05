@@ -54,6 +54,9 @@ enum EventInjector {
             runMacro(command.steps ?? [])
         case "launch":
             launch(command.target ?? "")
+        case "window":
+            // 앱 내 창 전환 — 키 입력(⌘`) 대신 AX API 직접 (사용자 단축키와 충돌 없음)
+            WindowSwitcher.cycle(next: command.dir != "prev")
         case "gesture":
             gesture(command.dir ?? "")
         case "zoom":
