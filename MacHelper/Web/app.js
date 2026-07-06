@@ -1088,7 +1088,7 @@
     let mDown = null, mMoved = false, mLong = null, cursorDragging = false;   // 1핑거 커서/탭
     let mPanLast = null;                                                       // 1핑거 뷰 팬(줌 상태)
     let two = null;                                                            // 2핑거 (pinch=줌 / pan=뷰팬 or mscroll)
-    let mThree = false, mGFired = false, mGStart = null, mGLast = null, mGFingers = 3;   // 3·4핑거 제스처(로컬)
+    let mThree = false, mGFired = false, mGStart = null, mGLast = null, mGFingers = 3, mGStartTime = 0;   // 3·4핑거 제스처(로컬)
 
     function cancelCursor() {                 // 2·3핑거 진입 시 1핑거 커서/드래그 취소(sticky)
       clearTimeout(mLong);
@@ -1110,8 +1110,10 @@
       const n = e.touches.length;
       if (n >= 3) {                            // 3·4핑거 제스처 (커서/2핑거 취소)
         cancelCursor(); two = null;
-        if (!mThree) { mThree = true; mGFired = false; mGStart = centroid(e.touches); mGLast = mGStart; mGFingers = n; }
+        if (!mThree) { mThree = true; mGFired = false; mGFingers = n; }
         else { mGFingers = Math.max(mGFingers, n); }   // 3→4 승격
+        mGStart = centroid(e.touches); mGLast = mGStart;   // 손가락 추가마다 재기준
+        mGStartTime = now();
         return;
       }
       if (n === 2) {                           // 2핑거 (커서 취소 후 pinch/pan 판정 대기)
@@ -1140,7 +1142,15 @@
     el.addEventListener("touchmove", (e) => {
       e.preventDefault();
       const len = e.touches.length;
-      if (mThree) { if (len >= 3) { mGLast = centroid(e.touches); mFireSwipe(); } return; }
+      if (mThree) {
+        if (len >= 3) {
+          const c = centroid(e.touches);
+          if (now() - mGStartTime < SWIPE3_SETTLE) mGStart = c;   // 착지 정착 창(오발화 방지)
+          mGLast = c;
+          mFireSwipe();
+        }
+        return;
+      }
       if (len === 2 && two) {
         const c = centroid(e.touches), d = dist2(e.touches);
         if (two.mode === null) {               // pinch vs pan 판정
@@ -1961,7 +1971,7 @@
   const ACCEL_CAP = 30;   // 가속 상한(px/이벤트). 배율/가속량/스크롤은 settings 에서 조절
   const TAP_MS = 250, TAP_MOVE = 8, DOUBLE_MS = 300;
   const FRICTION = 0.92, MOMENTUM_MIN = 0.04;
-  const SWIPE3_THRESH = 45, PINCH_DECIDE = 12, ZOOM_STEP = 0.12;
+  const SWIPE3_THRESH = 45, PINCH_DECIDE = 12, ZOOM_STEP = 0.12, SWIPE3_SETTLE = 60;
 
   const pad = document.getElementById("trackpad");
   let startTime = 0, moved = false, maxTouches = 0;
@@ -1969,7 +1979,7 @@
   let last = null, lastCentroid = null;
   let scrollVX = 0, scrollVY = 0, lastScrollMoveT = 0, momentumRAF = null;
   let lastClickTime = 0, clickCount = 0, lastTapEnd = 0;
-  let threeMode = false, g3fired = false, g3start = null, g3last = null;
+  let threeMode = false, g3fired = false, g3start = null, g3last = null, g3startTime = 0;
   let twoMode = null, d0 = 0, c0 = null, lastZoomDist = 0;
 
   function now() { return performance.now(); }
@@ -2049,8 +2059,10 @@
     } else { maxTouches = Math.max(maxTouches, n); armedForDrag = false; }
     if (n === 2) { twoMode = null; d0 = dist2(e.touches); c0 = centroid(e.touches); lastZoomDist = d0; }
     if (n >= 3) {
-      if (!threeMode) { threeMode = true; gFingers = n; g3start = centroid(e.touches); g3last = g3start; }
+      if (!threeMode) { threeMode = true; g3fired = false; gFingers = n; }
       else { gFingers = Math.max(gFingers, n); }   // 3→4손가락 추가 감지
+      g3start = centroid(e.touches); g3last = g3start;   // 손가락 추가마다 재기준(추가 손가락 무게중심 점프 무시)
+      g3startTime = now();                               // 정착 창 리셋
     }
     lastCentroid = centroid(e.touches);
   }, { passive: false });
@@ -2058,7 +2070,15 @@
   pad.addEventListener("touchmove", (e) => {
     e.preventDefault();
     const len = e.touches.length;
-    if (threeMode) { if (len >= 3) { g3last = centroid(e.touches); fireSwipeIfNeeded(); } moved = true; return; }
+    if (threeMode) {
+      if (len >= 3) {
+        const c = centroid(e.touches);
+        if (now() - g3startTime < SWIPE3_SETTLE) g3start = c;   // 착지 정착 창: 기준을 따라가 지터 흡수(오발화 방지)
+        g3last = c;
+        fireSwipeIfNeeded();
+      }
+      moved = true; return;
+    }
     if (len === 2) {
       const c = centroid(e.touches), d = dist2(e.touches);
       if (twoMode === null) {
