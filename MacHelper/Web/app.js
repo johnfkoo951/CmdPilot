@@ -453,7 +453,7 @@
     if (name === "keyboard") setTimeout(() => kb.focus(), 50); else kb.blur();
     if (name === "deck") renderDeck();
     if (name === "agent") startCmuxPoll(); else stopCmuxPoll();   // 에이전트 탭 표시 중엔 4초 자동 갱신
-    if (name === "mirror") { mirrorInit(); startMirror(); if (HW.present) { const mi = document.getElementById("mirror-input"); if (mi) mi.focus(); } } else stopMirror();
+    if (name === "mirror") { mirrorInit(); resetMirrorView(); startMirror(); if (HW.present) { const mi = document.getElementById("mirror-input"); if (mi) mi.focus(); } } else stopMirror();
     if (name === "term") { wireTerm(); startTermPoll(); focusTermTarget(); } else stopTermPoll();
     if (document.documentElement.classList.contains("docked")) applyDockCompanion();   // 활성 패널 변경 시 키보드 컴패니언 중복 회피
   }
@@ -538,6 +538,7 @@
   // ═════════ 미러 전체화면 (크롬 숨김 · 캔버스 확대) ═════════
   function mirrorFullOn() { return document.documentElement.classList.contains("mirror-full"); }
   function enterMirrorFull() {
+    resetMirrorView();   // 레이아웃 변경 시 팬 클램프 기준이 바뀌므로 리셋
     document.documentElement.classList.add("mirror-full");
     const b = document.getElementById("mirror-full");
     if (b) { b.textContent = "종료"; b.classList.add("on"); }
@@ -546,6 +547,7 @@
   }
   function exitMirrorFull() {
     if (!mirrorFullOn()) return;
+    resetMirrorView();
     document.documentElement.classList.remove("mirror-full");
     const b = document.getElementById("mirror-full");
     if (b) { b.textContent = "전체화면"; b.classList.remove("on"); }
@@ -917,6 +919,42 @@
 
   // ═════════ 화면 미러 (맥 화면 실시간 + 탭→클릭) ═════════
   const mirror = { canvas: null, ctx: null, dispW: 0, dispH: 0, pending: null, decoding: false, active: false, display: null };
+  // 미러 로컬 뷰(맥에 안 보냄 — 캔버스 CSS transform 전용). scale 1~5, tx/ty px.
+  const mirrorView = { scale: 1, tx: 0, ty: 0 };
+  const MIRROR_ZOOM_MAX = 5;
+  function applyMirrorView() {
+    if (!mirror.canvas) return;
+    const v = mirrorView;
+    mirror.canvas.style.transform = "translate(" + v.tx + "px," + v.ty + "px) scale(" + v.scale + ")";
+  }
+  function resetMirrorView() { mirrorView.scale = 1; mirrorView.tx = 0; mirrorView.ty = 0; applyMirrorView(); }
+  // 빈 여백 방지: 확대된 캔버스(offsetWidth×scale = 실제 시각 폭)가 스테이지를 덮도록 tx/ty 클램프.
+  function clampMirrorPan() {
+    const v = mirrorView;
+    if (v.scale <= 1) { v.tx = 0; v.ty = 0; return; }
+    const stage = document.getElementById("mirror-stage");
+    if (!stage || !mirror.canvas) return;
+    const bw = mirror.canvas.offsetWidth * v.scale, bh = mirror.canvas.offsetHeight * v.scale;
+    const sw = stage.clientWidth, sh = stage.clientHeight;
+    const maxX = Math.max(0, (bw - sw) / 2), maxY = Math.max(0, (bh - sh) / 2);
+    v.tx = Math.max(-maxX, Math.min(maxX, v.tx));
+    v.ty = Math.max(-maxY, Math.min(maxY, v.ty));
+  }
+  // 핀치 midpoint(clientX/Y) 기준 줌. 그 지점 콘텐츠 고정. transform-origin center=스테이지 중심 가정.
+  function zoomAt(clientX, clientY, factor, stageRect) {
+    const v = mirrorView, s0 = v.scale;
+    let s1 = Math.max(1, Math.min(MIRROR_ZOOM_MAX, s0 * factor));
+    if (s1 === s0) return;
+    const cx = stageRect.left + stageRect.width / 2, cy = stageRect.top + stageRect.height / 2;
+    const dX = clientX - cx, dY = clientY - cy;   // midpoint - stageCenter
+    const k = s1 / s0;
+    v.tx = dX * (1 - k) + k * v.tx;               // = d(1-k) + k·tx₀
+    v.ty = dY * (1 - k) + k * v.ty;
+    v.scale = s1;
+    if (v.scale <= 1.0001) { v.scale = 1; v.tx = 0; v.ty = 0; }   // scale===1 → 리셋
+    clampMirrorPan();
+    applyMirrorView();
+  }
   function mirrorInit() {
     mirror.canvas = document.getElementById("mirror-canvas");
     if (!mirror.canvas || mirror.ctx) return;
@@ -924,7 +962,7 @@
     wireMirrorInput();
     wireMirrorKeys();   // 물리 키보드 → 맥
     const fit = document.getElementById("mirror-fit");
-    if (fit) fit.addEventListener("click", () => toast("화면 비율에 맞춰 표시 중"));
+    if (fit) fit.addEventListener("click", () => { resetMirrorView(); toast("원본 크기로 맞춤"); });
   }
   // (D) 미러: 물리 키보드 → 맥으로 (픽셀뷰라 t:text / t:key)
   const EVENT_KEYCODE = {
@@ -1047,43 +1085,127 @@
   }
   function wireMirrorInput() {
     const el = mirror.canvas;
-    let mDown = null, mMoved = false, mLong = null, twoStart = null;
+    let mDown = null, mMoved = false, mLong = null, cursorDragging = false;   // 1핑거 커서/탭
+    let mPanLast = null;                                                       // 1핑거 뷰 팬(줌 상태)
+    let two = null;                                                            // 2핑거 (pinch=줌 / pan=뷰팬 or mscroll)
+    let mThree = false, mGFired = false, mGStart = null, mGLast = null, mGFingers = 3;   // 3·4핑거 제스처(로컬)
+
+    function cancelCursor() {                 // 2·3핑거 진입 시 1핑거 커서/드래그 취소(sticky)
+      clearTimeout(mLong);
+      if (cursorDragging) { send({ t: "mup" }); cursorDragging = false; }
+      mDown = null; mMoved = false; mPanLast = null;
+    }
+    function mFireSwipe() {
+      if (mGFired || !mGStart || !mGLast) return;
+      const dx = mGLast.x - mGStart.x, dy = mGLast.y - mGStart.y;
+      if (Math.hypot(dx, dy) < SWIPE3_THRESH) return;
+      const dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
+      fireGesture(mGFingers, dir);            // 트랙패드와 공유 헬퍼(런타임 참조 → hoisting OK)
+      mGFired = true;
+    }
+    function resetMirrorGesture() { mThree = false; mGFired = false; mGStart = null; mGLast = null; mGFingers = 3; }
+
     el.addEventListener("touchstart", (e) => {
-      const inp = document.getElementById("mirror-input"); if (inp && HW.present) inp.focus();   // 물리 키보드 라우팅용 (iPad는 소프트키보드 안 뜸)
-      if (e.touches.length === 2) {   // 두 손가락 = 스크롤 시작
-        twoStart = { y: (e.touches[0].clientY + e.touches[1].clientY) / 2, n: normFromTouch(e.touches[0].clientX, e.touches[0].clientY) };
-        mDown = null; clearTimeout(mLong); return;
+      const inp = document.getElementById("mirror-input"); if (inp && HW.present) inp.focus();
+      const n = e.touches.length;
+      if (n >= 3) {                            // 3·4핑거 제스처 (커서/2핑거 취소)
+        cancelCursor(); two = null;
+        if (!mThree) { mThree = true; mGFired = false; mGStart = centroid(e.touches); mGLast = mGStart; mGFingers = n; }
+        else { mGFingers = Math.max(mGFingers, n); }   // 3→4 승격
+        return;
       }
-      const t = e.touches[0], n = normFromTouch(t.clientX, t.clientY);
-      if (!n) return;
-      mDown = n; mMoved = false;
-      mLong = setTimeout(() => {   // 길게 = 우클릭
+      if (n === 2) {                           // 2핑거 (커서 취소 후 pinch/pan 판정 대기)
+        cancelCursor(); mThree = false;
+        const c = centroid(e.touches), d = dist2(e.touches);
+        two = { mode: null, d0: d, c0: c, lastDist: d, lastCentroid: c,
+                startN: normFromTouch(e.touches[0].clientX, e.touches[0].clientY) };
+        return;
+      }
+      const t = e.touches[0];                  // n === 1
+      if (mirrorView.scale > 1) {              // 줌 상태: 드래그=팬, 탭=클릭
+        mPanLast = { x: t.clientX, y: t.clientY };
+        mDown = normFromTouch(t.clientX, t.clientY);
+        mMoved = false;
+        return;
+      }
+      const nrm = normFromTouch(t.clientX, t.clientY);  // scale===1: 기존 커서
+      if (!nrm) return;
+      mDown = nrm; mMoved = false; cursorDragging = false;
+      mLong = setTimeout(() => {               // 길게 = 우클릭 (scale===1 한정)
         send({ t: "mtap", nx: mDown.nx, ny: mDown.ny, button: "right", count: 1 });
         mDown = null; buzz();
       }, 500);
     }, { passive: true });
+
     el.addEventListener("touchmove", (e) => {
       e.preventDefault();
-      if (twoStart && e.touches.length === 2) {
-        const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        const dy = cy - twoStart.y; twoStart.y = cy;
-        if (twoStart.n) send({ t: "mscroll", nx: twoStart.n.nx, ny: twoStart.n.ny, dx: 0, dy: dy });
+      const len = e.touches.length;
+      if (mThree) { if (len >= 3) { mGLast = centroid(e.touches); mFireSwipe(); } return; }
+      if (len === 2 && two) {
+        const c = centroid(e.touches), d = dist2(e.touches);
+        if (two.mode === null) {               // pinch vs pan 판정
+          const distChange = Math.abs(d - two.d0);
+          const transChange = two.c0 ? Math.hypot(c.x - two.c0.x, c.y - two.c0.y) : 0;
+          if (Math.max(distChange, transChange) > PINCH_DECIDE) {
+            two.mode = distChange > transChange ? "pinch" : "pan";
+            if (two.mode === "pinch") two.lastDist = d;   // 판정 순간 기준거리 리셋(시작 점프 제거)
+          }
+        }
+        if (two.mode === "pinch") {
+          const stage = document.getElementById("mirror-stage"), sr = stage.getBoundingClientRect();
+          const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+          const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+          zoomAt(midX, midY, d / two.lastDist, sr);
+          two.lastDist = d;
+        } else if (two.mode === "pan") {
+          const dx = c.x - two.lastCentroid.x, dy = c.y - two.lastCentroid.y;
+          if (mirrorView.scale > 1) { mirrorView.tx += dx; mirrorView.ty += dy; clampMirrorPan(); applyMirrorView(); }
+          else if (two.startN) send({ t: "mscroll", nx: two.startN.nx, ny: two.startN.ny, dx: 0, dy: dy });
+        }
+        two.lastCentroid = c;
         return;
       }
-      if (!mDown) return;
-      const t = e.touches[0], n = normFromTouch(t.clientX, t.clientY);
-      if (!n) return;
-      clearTimeout(mLong);
-      if (!mMoved) { send({ t: "mdown", nx: mDown.nx, ny: mDown.ny, button: "left" }); mMoved = true; }
-      send({ t: "mmove", nx: n.nx, ny: n.ny });
+      if (len === 1) {
+        const t = e.touches[0];
+        if (mirrorView.scale > 1 && mPanLast) {   // 줌 상태 1핑거 = 뷰 팬
+          const dx = t.clientX - mPanLast.x, dy = t.clientY - mPanLast.y;
+          if (Math.abs(dx) > 3 || Math.abs(dy) > 3) mMoved = true;
+          mirrorView.tx += dx; mirrorView.ty += dy; clampMirrorPan(); applyMirrorView();
+          mPanLast = { x: t.clientX, y: t.clientY };
+          return;
+        }
+        if (!mDown) return;                       // scale===1 커서 이동
+        const nrm = normFromTouch(t.clientX, t.clientY);
+        if (!nrm) return;
+        clearTimeout(mLong);
+        if (!cursorDragging) { send({ t: "mdown", nx: mDown.nx, ny: mDown.ny, button: "left" }); cursorDragging = true; mMoved = true; }
+        send({ t: "mmove", nx: nrm.nx, ny: nrm.ny });
+      }
     }, { passive: false });
-    el.addEventListener("touchend", () => {
-      clearTimeout(mLong); twoStart = null;
-      if (!mDown) return;
-      if (mMoved) send({ t: "mup" });
-      else send({ t: "mtap", nx: mDown.nx, ny: mDown.ny, button: "left", count: 1 });
-      mDown = null;
-    });
+
+    el.addEventListener("touchend", (e) => {
+      const remaining = e.touches.length;
+      if (mThree) { mFireSwipe(); if (remaining === 0) resetMirrorGesture(); return; }
+      if (remaining >= 1) {                        // 손가락 하나 뗐지만 남음: 2핑거 종료·클릭 억제
+        if (remaining === 1) {
+          two = null;
+          const t = e.touches[0];
+          if (mirrorView.scale > 1) mPanLast = { x: t.clientX, y: t.clientY };
+        }
+        return;
+      }
+      clearTimeout(mLong);                         // remaining === 0
+      if (cursorDragging) { send({ t: "mup" }); cursorDragging = false; }
+      else if (mDown && !mMoved) send({ t: "mtap", nx: mDown.nx, ny: mDown.ny, button: "left", count: 1 });
+      mDown = null; mMoved = false; mPanLast = null; two = null;
+    }, { passive: false });
+
+    el.addEventListener("touchcancel", () => {
+      clearTimeout(mLong);
+      if (cursorDragging) { send({ t: "mup" }); cursorDragging = false; }
+      if (mThree) mFireSwipe();
+      mDown = null; mMoved = false; mPanLast = null; two = null; resetMirrorGesture();
+    }, { passive: false });
   }
 
   // ═════════ cmux 터미널 뷰 (포커스된 터미널 화면 텍스트 + 입력) ═════════
@@ -1899,16 +2021,19 @@
   settings.gestures = Object.assign({}, DEFAULT_GESTURES, settings.gestures);
 
   let gFingers = 3;   // 이번 제스처의 손가락 수 (3 또는 4+)
+  // 트랙패드·미러 공유: 손가락 수+방향 → 배정된 제스처 실행 (GESTURE_ACTIONS는 런타임 참조)
+  function fireGesture(fingers, dir) {
+    const action = GESTURE_ACTIONS[settings.gestures["s" + Math.min(fingers, 4) + dir]] || GESTURE_ACTIONS.none;
+    buzz();
+    action.run();
+  }
   function fireSwipeIfNeeded() {
     if (g3fired || !g3start || !g3last) return;
     const dx = g3last.x - g3start.x, dy = g3last.y - g3start.y;
     if (Math.hypot(dx, dy) < SWIPE3_THRESH) return;
     const dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
     flushMotion(true);
-    const key = "s" + Math.min(gFingers, 4) + dir;
-    const action = GESTURE_ACTIONS[settings.gestures[key]] || GESTURE_ACTIONS.none;
-    buzz();
-    action.run();
+    fireGesture(gFingers, dir);
     g3fired = true;
   }
 
