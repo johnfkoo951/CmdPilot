@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CmdSpace Pilot — 개발 로드맵</title>
+</head>
+<body>
+<style>
+  :root {
+    /* CmdSpace 라이트 (CMDS Green 액센트) */
+    --bg: #f4f6f8;
+    --surface: #ffffff;
+    --surface-2: #eef1f5;
+    --surface-3: #e3e8ee;
+    --border: #dbe2ea;
+    --border-strong: #c6d0da;
+    --text: #14181d;
+    --text-dim: #4d5762;
+    --text-mute: #7a8593;
+    --accent: #134538;
+    --accent-soft: #dcece5;
+    --broken: #c5352f;      --broken-bg: #fbe6e4;
+    --partial: #9a6a12;     --partial-bg: #f7edd8;
+    --working: #1c7a49;     --working-bg: #dcefe2;
+    --dead: #6b7480;        --dead-bg: #e8ecf1;
+    --shadow: 0 1px 2px rgba(20,30,45,.06), 0 8px 24px rgba(20,30,45,.06);
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+    --sans: -apple-system, system-ui, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115;
+      --surface: #171a21;
+      --surface-2: #20242d;
+      --surface-3: #2b3039;
+      --border: #292f39;
+      --border-strong: #363d49;
+      --text: #f2f4f7;
+      --text-dim: #a7afb9;
+      --text-mute: #6f7885;
+      --accent: #E985A2;
+      --accent-soft: #2a1a20;
+      --broken: #ff6b6b;      --broken-bg: #2a1618;
+      --partial: #e3b457;     --partial-bg: #2a2213;
+      --working: #5cd18f;     --working-bg: #12271c;
+      --dead: #828c9a;        --dead-bg: #20242d;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f4f6f8; --surface: #ffffff; --surface-2: #eef1f5; --surface-3: #e3e8ee;
+    --border: #dbe2ea; --border-strong: #c6d0da; --text: #14181d; --text-dim: #4d5762; --text-mute: #7a8593;
+    --accent: #134538; --accent-soft: #dcece5;
+    --broken: #c5352f; --broken-bg: #fbe6e4; --partial: #9a6a12; --partial-bg: #f7edd8;
+    --working: #1c7a49; --working-bg: #dcefe2; --dead: #6b7480; --dead-bg: #e8ecf1;
+    --shadow: 0 1px 2px rgba(20,30,45,.06), 0 8px 24px rgba(20,30,45,.06);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115; --surface: #171a21; --surface-2: #20242d; --surface-3: #2b3039;
+    --border: #292f39; --border-strong: #363d49; --text: #f2f4f7; --text-dim: #a7afb9; --text-mute: #6f7885;
+    --accent: #E985A2; --accent-soft: #2a1a20;
+    --broken: #ff6b6b; --broken-bg: #2a1618; --partial: #e3b457; --partial-bg: #2a2213;
+    --working: #5cd18f; --working-bg: #12271c; --dead: #828c9a; --dead-bg: #20242d;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: var(--sans); line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: clamp(20px, 4vw, 56px) clamp(16px, 4vw, 40px) 80px; }
+
+  /* ── 헤더 ── */
+  header { display: flex; flex-direction: column; gap: 18px; margin-bottom: 34px; }
+  .brandline { display: flex; align-items: center; gap: 10px; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-mute); font-weight: 600; }
+  .dish { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); flex: 0 0 auto; }
+  h1 { font-size: clamp(26px, 5vw, 40px); line-height: 1.1; margin: 0; letter-spacing: -.02em; text-wrap: balance; font-weight: 700; }
+  h1 .sub { display: block; font-size: clamp(14px, 2.4vw, 17px); font-weight: 500; color: var(--text-dim); letter-spacing: 0; margin-top: 8px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--text-mute); font-family: var(--mono); }
+  .meta b { color: var(--text-dim); font-weight: 600; }
+
+  /* ── 범례 ── */
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .legend .grp { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-dim); }
+  .legend .grp + .grp { margin-left: 4px; }
+
+  /* ── 상태 pill ── */
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; line-height: 1.4; }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+  .s-broken { color: var(--broken); background: var(--broken-bg); }
+  .s-partial { color: var(--partial); background: var(--partial-bg); }
+  .s-working { color: var(--working); background: var(--working-bg); }
+  .s-dead { color: var(--dead); background: var(--dead-bg); }
+  .s-idea { color: var(--accent); background: var(--accent-soft); }
+
+  /* 난이도 chip */
+  .dif { font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 6px; background: var(--surface-3); color: var(--text-dim); border: 1px solid var(--border); letter-spacing: .02em; }
+
+  /* ── 섹션 ── */
+  section { margin-top: 46px; }
+  .sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .sec-num { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--accent); flex: 0 0 auto; }
+  .sec-head h2 { font-size: clamp(18px, 3.2vw, 23px); margin: 0; letter-spacing: -.01em; font-weight: 700; }
+  .sec-head .note { margin-left: auto; font-size: 12.5px; color: var(--text-mute); }
+
+  /* ── 요약 테이블 ── */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+  table.summary { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 460px; }
+  table.summary th, table.summary td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  table.summary thead th { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-mute); font-weight: 600; background: var(--surface-2); }
+  table.summary tbody tr:last-child td { border-bottom: none; }
+  table.summary td.area { font-weight: 600; white-space: nowrap; }
+  table.summary td.desc { color: var(--text-dim); font-size: 13px; }
+
+  /* ── 아이템 카드 (섹션1) ── */
+  .cards { display: flex; flex-direction: column; gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--stripe, var(--border-strong)); border-radius: 12px; padding: 18px 20px; box-shadow: var(--shadow); }
+  .card.b-broken { --stripe: var(--broken); }
+  .card.b-partial { --stripe: var(--partial); }
+  .card.b-working { --stripe: var(--working); }
+  .card.b-dead { --stripe: var(--dead); }
+  .card-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .card-top .id { font-family: var(--mono); font-size: 12.5px; color: var(--text-mute); font-weight: 600; }
+  .card-top h3 { font-size: 16px; margin: 0; font-weight: 650; flex: 1 1 auto; min-width: 200px; letter-spacing: -.01em; }
+  .card dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: 13.5px; }
+  .card dt { color: var(--text-mute); font-weight: 600; font-size: 12px; letter-spacing: .03em; padding-top: 1px; white-space: nowrap; }
+  .card dd { margin: 0; color: var(--text-dim); }
+  .card dd b { color: var(--text); font-weight: 600; }
+  code, .path { font-family: var(--mono); font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 5px; color: var(--text); border: 1px solid var(--border); }
+
+  /* ── 컴팩트 리스트 (섹션2·3·4) ── */
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; gap: 12px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px 16px; }
+  .row .body { flex: 1 1 auto; min-width: 0; }
+  .row .body .t { font-weight: 600; font-size: 14px; margin-bottom: 3px; }
+  .row .body .d { font-size: 13px; color: var(--text-dim); }
+  .row .side { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
+
+  /* ── 백로그 그리드 ── */
+  .backlog { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+  .bgroup { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .bgroup h4 { margin: 0 0 12px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  .bgroup ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .bgroup li { font-size: 13.5px; color: var(--text-dim); display: flex; gap: 8px; align-items: baseline; }
+  .bgroup li b { color: var(--text); font-weight: 600; }
+  .bgroup li .dif { align-self: center; margin-left: auto; }
+
+  /* ── 우선순위 보드 ── */
+  .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .col { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+  .col > header { display: block; padding: 14px 18px; margin: 0; border-bottom: 1px solid var(--border); }
+  .col .k { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+  .col .ks { font-size: 12px; color: var(--text-mute); margin-top: 2px; }
+  .col.now { border-top: 3px solid var(--broken); }
+  .col.next { border-top: 3px solid var(--partial); }
+  .col.later { border-top: 3px solid var(--working); }
+  .col ol { margin: 0; padding: 8px; list-style: none; counter-reset: p; display: flex; flex-direction: column; gap: 2px; }
+  .col ol li { counter-increment: p; display: flex; gap: 11px; align-items: baseline; padding: 10px 11px; border-radius: 9px; font-size: 13.5px; color: var(--text-dim); }
+  .col ol li:hover { background: var(--surface-2); }
+  .col ol li::before { content: counter(p); font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); flex: 0 0 auto; }
+  .col ol li b { color: var(--text); font-weight: 600; }
+  .col ol li .dif { margin-left: auto; align-self: center; }
+  .star { color: var(--accent); }
+
+  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--text-mute); text-align: center; }
+
+  @media (max-width: 720px) {
+    .board { grid-template-columns: 1fr; }
+    .card dl { grid-template-columns: 1fr; gap: 3px 0; }
+    .card dt { padding-top: 8px; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brandline"><span class="dish"></span> CmdSpace Pilot · 개발 로드맵</div>
+    <h1>못 끝낸 것 · 알려진 한계 · 백로그
+      <span class="sub">폰을 무선 트랙패드·키보드·화면 뷰어로 만드는 맥 메뉴바 앱 — 무엇이 되고, 무엇이 막혔고, 다음에 무엇을 할지.</span>
+    </h1>
+    <div class="meta">
+      <span><b>기준일</b> 2026-07-07</span>
+      <span><b>근거</b> 코드 감사 23건 + 개발 이력</span>
+      <span><b>문서</b> ROADMAP.md</span>
+    </div>
+    <div class="legend">
+      <span class="grp"><span class="pill s-broken">안 됨</span></span>
+      <span class="grp"><span class="pill s-partial">부분</span></span>
+      <span class="grp"><span class="pill s-working">동작·개선여지</span></span>
+      <span class="grp"><span class="pill s-dead">죽은 코드</span></span>
+      <span class="grp"><span class="pill s-idea">아이디어</span></span>
+      <span class="grp" style="margin-left:auto"><span class="dif">S</span> 반나절 · <span class="dif">M</span> 1–2일 · <span class="dif">L</span> 며칠 · <span class="dif">XL</span> 대공사</span>
+    </div>
+  </header>
+
+  <!-- 요약 -->
+  <section style="margin-top:8px">
+    <div class="sec-head"><span class="sec-num">◇</span><h2>상태 요약</h2><span class="note">기능별 한눈에</span></div>
+    <div class="tablewrap">
+      <table class="summary">
+        <thead><tr><th>영역</th><th>상태</th><th>한 줄</th></tr></thead>
+        <tbody>
+          <tr><td class="area">트랙패드·키보드·덱·클릭·스크롤</td><td><span class="pill s-working">동작</span></td><td class="desc">핵심 기능 안정</td></tr>
+          <tr><td class="area">마우스 부드러움 (1€ + 보간)</td><td><span class="pill s-working">완료</span></td><td class="desc">클라 필터 + 서버 서브픽셀 보간</td></tr>
+          <tr><td class="area">한글 IME 입력 (터미널·미러)</td><td><span class="pill s-working">완료</span></td><td class="desc">Termius식 — 진짜 input으로 조합</td></tr>
+          <tr><td class="area">미러 (화면 보기) + 핀치줌·팬</td><td><span class="pill s-working">동작</span></td><td class="desc">MJPEG 경량 · 오디오·코덱 없음</td></tr>
+          <tr><td class="area">cmux 터미널 뷰</td><td><span class="pill s-working">동작</span></td><td class="desc">렌더그리드 텍스트 + 입력</td></tr>
+          <tr><td class="area">3·4핑거 제스처 인식</td><td><span class="pill s-partial">부분</span></td><td class="desc">인식은 됨, 사용성 보통</td></tr>
+          <tr><td class="area">에어마우스 (모션 센서)</td><td><span class="pill s-broken">안 됨</span></td><td class="desc">HTTPS 필요 → http 접속에서 원천 차단</td></tr>
+          <tr><td class="area">데스크탑(공간) 전환</td><td><span class="pill s-broken">안 됨</span></td><td class="desc">macOS 26이 합성 전환 차단</td></tr>
+          <tr><td class="area">iPad 도킹 분할</td><td><span class="pill s-partial">부분</span></td><td class="desc">코어 OK · 스플리터 오프셋·터치타깃 버그</td></tr>
+          <tr><td class="area">화면기록 권한 안내</td><td><span class="pill s-partial">부분</span></td><td class="desc">인앱 UI 없음 (손쉬운사용만 폴링)</td></tr>
+          <tr><td class="area">발표 스팟라이트</td><td><span class="pill s-partial">부분</span></td><td class="desc">반경 조절·전용 UI·off() 미완</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 1. 지금 안 되는 것 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2>지금 안 되는 것</h2><span class="note">우선 수정</span></div>
+    <div class="cards">
+
+      <article class="card b-broken">
+        <div class="card-top"><span class="id">1.1</span><h3>에어마우스 (모션 센서) — HTTPS 보안 컨텍스트 필요</h3><span class="pill s-broken">안 됨</span><span class="dif">M</span></div>
+        <dl>
+          <dt>증상</dt><dd>에어 버튼 → "http에선 모션 센서 차단" 안내, 동작 안 함.</dd>
+          <dt>근본 원인</dt><dd>iOS는 <b>DeviceMotion/Orientation을 HTTPS(secure context)에서만</b> 허용. 서버는 <code>http://…:8766</code>만 광고 → <code>isSecureContext=false</code> → 즉시 차단. <b>모션→커서 코드와 권한 요청 흐름은 이미 정상</b>, 오직 오리진 때문에 도달을 못 함.</dd>
+          <dt>이미 있음</dt><dd><span class="path">:443 TLS 리스너</span>가 존재하나 <span class="path">updateURL()</span>이 http만 만들어 메뉴/QR에 노출.</dd>
+          <dt>해결</dt><dd><b>(권장) <code>tailscale serve</code></b> 로 <code>https://&lt;맥&gt;.&lt;tailnet&gt;.ts.net</code> 제공 → 보안 컨텍스트 + wss 자동. 그 https를 메뉴/QR에 광고. (인증서·DNS 부담 없음)</dd>
+        </dl>
+      </article>
+
+      <article class="card b-broken">
+        <div class="card-top"><span class="id">1.2</span><h3>데스크탑(공간) 좌/우 전환 — macOS 26 차단</h3><span class="pill s-broken">안 됨</span><span class="dif">L</span></div>
+        <dl>
+          <dt>증상</dt><dd>4핑거 좌/우(데스크탑 전환) 기본 배정이 실제로 무동작.</dd>
+          <dt>근본 원인</dt><dd><b>macOS 26이 공간 전환을 합성 CGEvent(⌃←/→)·CGS/SkyLight 비공개 API 양쪽 다 차단</b> (EventInjector 주석에 확인됨). 프로그램적 전환 불가.</dd>
+          <dt>선택지</dt><dd>4핑거 좌/우를 <b>실제 되는 액션</b>(앱전환·뒤로/앞으로 등)으로 재배정, 또는 "미지원" 경고 노출. 미션컨트롤 <code>⌃↑</code>·엑스포제 <code>⌃↓</code>는 정상.</dd>
+        </dl>
+      </article>
+
+      <article class="card b-partial">
+        <div class="card-top"><span class="id">1.3</span><h3>iPad 도킹 분할 버그</h3><span class="pill s-partial">부분</span><span class="dif">S–M</span></div>
+        <dl>
+          <dt>스플리터</dt><dd>드래그가 <b>main padding + 14px 트랙을 빼지 않아</b> 손가락과 어긋남. 그리드 내부 기준으로 재계산 필요.</dd>
+          <dt>기본값</dt><dd><code>dockSplit 0.42</code>가 어떤 프리셋과도 불일치 → 작게/균형/크게 3버튼이 처음에 모두 미선택으로 보임.</dd>
+          <dt>터치타깃</dt><dd>스플리터 14px → 44px 가이드 미달, 잡기 어려움. hit 영역 20–24px로 확대.</dd>
+          <dt>코어</dt><dd>fr 계산·방향·클램프·회전·저장은 <b>버그 없음</b>으로 검증됨.</dd>
+        </dl>
+      </article>
+
+      <article class="card b-partial">
+        <div class="card-top"><span class="id">1.4</span><h3>화면기록 권한 인앱 안내 없음</h3><span class="pill s-partial">부분</span><span class="dif">S</span></div>
+        <dl>
+          <dt>문제</dt><dd>미러/캡처는 손쉬운사용과 <b>별개인 '화면 기록' 권한</b>이 필요한데 메뉴바 UI는 손쉬운사용만 안내 → 권한 없으면 미러가 조용히 안 뜸.</dd>
+          <dt>필요</dt><dd>메뉴에 화면기록 권한 타일 + <b>설정 열기</b> 링크, 최초 사용 전 프리플라이트 안내.</dd>
+        </dl>
+      </article>
+
+      <article class="card b-partial">
+        <div class="card-top"><span class="id">1.5</span><h3>발표 스팟라이트 미완</h3><span class="pill s-partial">부분</span><span class="dif">S</span></div>
+        <dl>
+          <dt>문제</dt><dd><span class="path">off()</span> 미호출(연결 종료 시 자동 off 필요) · 반경(110 고정) 폰 조절 경로 없음 · 전용 버튼/UI 없음.</dd>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <!-- 2. 알려진 한계 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span><h2>알려진 한계</h2><span class="note">설계상 / 현재 불가</span></div>
+    <div class="list">
+      <div class="row"><div class="body"><div class="t">트랙패드 연속 제스처 (손가락 추종·되감기)</div><div class="d">시스템 트랙패드 드라이버가 멀티터치 위상(phase)을 넘겨야 함. CGEvent 키 주입으론 그 연속 이벤트 생성 불가(비공개 API) → 개별 단축키 발화가 최선.</div></div><div class="side"><span class="pill s-dead">불가</span></div></div>
+      <div class="row"><div class="body"><div class="t">미러 오디오·비디오 코덱</div><div class="d">현재 MJPEG intra-only(매 프레임 전체 JPEG). 오디오 없음, 동적 화면 대역폭↑. 고품질은 H.264 + WebCodecs/WebRTC 필요(대공사). 지금은 "보며 조작"용 경량 뷰어로 의도됨.</div></div><div class="side"><span class="pill s-partial">의도된 한계</span></div></div>
+      <div class="row"><div class="body"><div class="t">공간 전환 프로그램 제어</div><div class="d">위 1.2 — macOS 26 정책으로 합성·비공개 API 양쪽 차단.</div></div><div class="side"><span class="pill s-broken">OS 정책</span></div></div>
+    </div>
+  </section>
+
+  <!-- 3. 죽은 코드 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2>정리 대상</h2><span class="note">죽은 코드 · 미연결</span></div>
+    <div class="list">
+      <div class="row"><div class="body"><div class="t"><span class="path">SpaceSwitcher.swift</span></div><div class="d">비공개 CGS/SkyLight 공간 전환. 호출부 0건. 심사·안정성 리스크 → 삭제 권장.</div></div><div class="side"><span class="pill s-dead">삭제</span></div></div>
+      <div class="row"><div class="body"><div class="t"><span class="path">EventInjector.gesture()</span> + <span class="path">case "gesture"</span></div><div class="d">웹이 <code>t:"gesture"</code>를 안 보냄(제스처는 raw key로 전송). 프로토콜 단순화 위해 제거 검토.</div></div><div class="side"><span class="pill s-dead">제거</span></div></div>
+      <div class="row"><div class="body"><div class="t"><span class="path">SpotlightOverlay.off()</span></div><div class="d">미사용. 연결 종료 자동 off로 연결하거나 제거.</div></div><div class="side"><span class="pill s-dead">연결/제거</span></div></div>
+    </div>
+  </section>
+
+  <!-- 4. 개선 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2>개선하면 좋은 것</h2><span class="note">동작하지만</span></div>
+    <div class="list">
+      <div class="row"><div class="body"><div class="t">3·4핑거 제스처 사용성</div><div class="d">인식은 되나 감(감도/오발화)이 완벽하진 않음. 재기준+정착창+우세축으로 개선했으나 실기기 튜닝 여지. "손가락 뗄 때 발화(중간 되돌리면 취소)" 옵션 검토.</div></div><div class="side"><span class="pill s-partial">부분</span><span class="dif">S</span></div></div>
+      <div class="row"><div class="body"><div class="t">cmux 브리지 결합도</div><div class="d">소켓 인증 self-heal이 cmux 내부 JSON 스키마/에러 문자열에 강결합 → 업그레이드에 취약. 공식 automation-token API 나오면 이관.</div></div><div class="side"><span class="pill s-working">동작</span><span class="dif">M</span></div></div>
+      <div class="row"><div class="body"><div class="t">Windows 포트 기능 매트릭스</div><div class="d">Windows 서버엔 코어 입력만. mirror/capture/ocr/cmux/window 미구현이나 공유 클라가 탭을 띄움 → 미지원 탭 숨김/표기 + 매트릭스 문서 필요.</div></div><div class="side"><span class="pill s-partial">부분</span><span class="dif">L</span></div></div>
+      <div class="row"><div class="body"><div class="t">로그 로테이션 · 활성 포트 표기 · p12 패스프레이즈 외부화</div><div class="d"><code>/tmp</code> 진단 로그 무제한 append · :80/:443 실패 시 조용히 스킵 · 인증서 패스('macpilot') 하드코딩.</div></div><div class="side"><span class="pill s-working">동작</span><span class="dif">S</span></div></div>
+      <div class="row"><div class="body"><div class="t">카메라 OCR</div><div class="d">실시간 카메라 아니라 파일 피커 1장. 빈 결과 무피드백 → 명시 메시지, (향후) 연속 스캔 모드.</div></div><div class="side"><span class="pill s-working">동작</span><span class="dif">S</span></div></div>
+    </div>
+  </section>
+
+  <!-- 5. 백로그 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span><h2>추가 기능 아이디어</h2><span class="note">백로그</span></div>
+    <div class="backlog">
+      <div class="bgroup">
+        <h4>입력 · 제어</h4>
+        <ul>
+          <li><span>제스처 취소 <b>fire-on-release</b> — 중간 되돌리면 미발화</span><span class="dif">S</span></li>
+          <li><span>커스텀 제스처를 <b>매크로/앱실행</b>에 배정</span><span class="dif">S</span></li>
+          <li><span>스크롤 관성 튜닝 <b>프리셋 UI</b></span><span class="dif">S</span></li>
+          <li><span>에어마우스 <b>클릭 제스처</b>(흔들기/탭) — HTTPS 후</span><span class="dif">M</span></li>
+        </ul>
+      </div>
+      <div class="bgroup">
+        <h4>미러 · 화면</h4>
+        <ul>
+          <li><span>특정 <b>창/영역만 스트림</b>(SCContentFilter)</span><span class="dif">M</span></li>
+          <li><span>화질 프리셋 <b>수동 토글</b>(선명/절전)</span><span class="dif">S</span></li>
+          <li><span><b>H.264 미러</b>(VideoToolbox+WebCodecs)</span><span class="dif">XL</span></li>
+          <li><span>미러 <b>녹화/스냅샷</b> 저장</span><span class="dif">M</span></li>
+        </ul>
+      </div>
+      <div class="bgroup">
+        <h4>연결 · 온보딩</h4>
+        <ul>
+          <li><span><b>tailscale serve 자동 설정</b> 스크립트 + 메뉴 토글</span><span class="dif">M</span></li>
+          <li><span>QR에 https/http 둘 다 + "에어마우스용" 라벨</span><span class="dif">S</span></li>
+          <li><span><b>첫 실행 온보딩</b>(권한 3종·URL·QR)</span><span class="dif">M</span></li>
+          <li><span>연결 히스토리 · 재연결 견고화</span><span class="dif">S</span></li>
+        </ul>
+      </div>
+      <div class="bgroup">
+        <h4>덱 · 워크플로우</h4>
+        <ul>
+          <li><span>덱 버튼 <b>이미지/앱 아이콘 자동</b></span><span class="dif">S</span></li>
+          <li><span>cmux <b>딥 통합</b>(세션 생성/분할/붙여넣기)</span><span class="dif">M</span></li>
+          <li><span><b>클립보드 양방향</b>(맥↔폰 텍스트/이미지)</span><span class="dif">M</span></li>
+          <li><span>덱 폴더 <b>클라우드 동기/공유</b></span><span class="dif">M</span></li>
+        </ul>
+      </div>
+      <div class="bgroup">
+        <h4>플랫폼</h4>
+        <ul>
+          <li><span>Windows <b>시그니처 기능 포팅</b>(mirror/capture 우선)</span><span class="dif">L</span></li>
+          <li><span><b>다중 맥 전환</b>(한 폰에서 여러 서버)</span><span class="dif">M</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 우선순위 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">06</span><h2>우선순위 제안</h2><span class="note">무엇부터</span></div>
+    <div class="board">
+      <div class="col now">
+        <header><div class="k">바로</div><div class="ks">고임팩트 · 저난이도</div></header>
+        <ol>
+          <li><span>iPad 분할 스플리터·기본값·터치타깃 수정</span><span class="dif">S</span></li>
+          <li><span>화면기록 권한 인앱 안내</span><span class="dif">S</span></li>
+          <li><span>4핑거 좌/우(공간전환) macOS 26 처리</span><span class="dif">S</span></li>
+          <li><span>죽은 코드 정리</span><span class="dif">S</span></li>
+        </ol>
+      </div>
+      <div class="col next">
+        <header><div class="k">다음</div><div class="ks">핵심 가치</div></header>
+        <ol>
+          <li><span><b class="star">★</b> <b>에어마우스 HTTPS 해결</b> — tailscale serve</span><span class="dif">M</span></li>
+          <li><span>발표 스팟라이트 완성</span><span class="dif">S</span></li>
+          <li><span>제스처 취소(fire-on-release) 옵션</span><span class="dif">S</span></li>
+        </ol>
+      </div>
+      <div class="col later">
+        <header><div class="k">중장기</div><div class="ks">큰 투자</div></header>
+        <ol>
+          <li><span>Windows 시그니처 기능 포팅</span><span class="dif">L</span></li>
+          <li><span>H.264 미러</span><span class="dif">XL</span></li>
+          <li><span>온보딩 · 클립보드 양방향</span><span class="dif">M</span></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <footer>CmdSpace Pilot — joonlab/MacPilot 포크 · 구요한(johnfkoo951) · 세션마다 갱신, 완료 항목은 🟢로 전환</footer>
+</div>
+</body>
+</html>
