@@ -709,36 +709,12 @@
     }
   }
 
-  async function airStart() {
-    const needsPerm = typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function";
-    if (!window.isSecureContext && needsPerm) {
-      alert("에어마우스(모션 센서)는 HTTPS 접속에서만 동작합니다. 지금은 http로 열려 있어요.\n\n" +
-            "맥 메뉴바(📡) → '에어마우스·모션 (HTTPS)'에 표시된 https:// 주소로 폰에서 접속하세요.\n" +
-            "(Tailscale을 켠 폰에서 https://<맥이름>.<tailnet>.ts.net)\n\n" +
-            "그 주소를 홈 화면 아이콘으로 다시 추가하면 편합니다.");
-      return;
-    }
+  // 권한은 ensureMotionPermission()(에어 버튼 탭)에서 이미 확보. 여기선 센서 리스너만 붙이고 이동 시작.
+  function airStart() {
     if (typeof DeviceMotionEvent === "undefined" && typeof DeviceOrientationEvent === "undefined") {
       alert("이 브라우저는 모션 센서를 지원하지 않습니다."); return;
     }
     if (!airListening) {
-      const perm = await airRequestPermissions();
-      if (!perm.ok) {
-        airBtn.classList.remove("held");
-        airStatus("에어");
-        // iOS 17+/27 은 전역 토글을 없애고 '사이트별 권한'으로 바꿈 → 주소창 왼쪽 메뉴에서 해제.
-        alert(
-          "모션 센서 권한을 얻지 못했어요.\n\n" +
-          "iOS 17 이상은 사이트별 권한이라, 주소창에서 풀어야 합니다:\n" +
-          "① 주소창 왼쪽의 메뉴 아이콘(≡ 또는 ⊞) 탭\n" +
-          "② 웹 사이트 설정(Website Settings) 선택\n" +
-          "③ 동작 및 방향(Motion & Orientation)을 허용(Allow)으로\n" +
-          "→ 페이지 새로고침 후 🛸 에어 다시 누르기\n\n" +
-          "안 보이면: 사생활 보호(Private) 탭으로 이 주소를 열고 🛸 → 팝업에서 허용(Allow)\n\n" +
-          "[진단] " + location.protocol + " secure=" + window.isSecureContext + " / " + perm.detail
-        );
-        return;
-      }
       window.addEventListener("devicemotion", onAirMotion);
       window.addEventListener("deviceorientation", onAirOrient);
       airListening = true;
@@ -757,7 +733,7 @@
       if (airLastEvent < t0) {
         airStop();
         alert("센서 이벤트가 오지 않습니다.\n\n현재 주소: " + location.protocol + "//" + location.host +
-              "\n- https://pilot.cmdspace.work 인지 확인\n- 첫 사용 시 뜨는 '동작 및 방향' 팝업에서 허용했는지 확인");
+              "\n- 자물쇠(HTTPS)로 접속했는지\n- 모션 팝업에서 '허용'을 눌렀는지 확인");
       } else {
         airStatus("작동중");
       }
@@ -774,8 +750,43 @@
     flushMotion(true);
   }
 
+  // 모션 권한(iOS)은 pointerdown 이 아니라 click(=탭)에서 요청해야 팝업이 뜬다.
+  // 그래서 권한 획득(탭)과 이동(누르고 있기)을 분리한다.
+  const needsMotionPerm = typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function";
+  let airGranted = !needsMotionPerm;   // 권한 개념 없는 플랫폼(안드 등)은 바로 허용
+  async function ensureMotionPermission() {
+    if (airGranted) return true;
+    if (!window.isSecureContext) {
+      toast("에어마우스는 HTTPS 접속에서만 동작해요");
+      alert("에어마우스(모션 센서)는 HTTPS에서만 동작합니다. 지금은 http로 열려 있어요.\n\n" +
+            "맥 메뉴바(📡) → '에어마우스·모션 (HTTPS)'의 https:// 주소로 접속하세요.\n" +
+            "(Tailscale 켠 폰 → https://<맥이름>.<tailnet>.ts.net)");
+      return false;
+    }
+    const perm = await airRequestPermissions();
+    if (perm.ok) {
+      airGranted = true;
+      airStatus("에어");
+      toast("모션 허용됨 — 에어 버튼을 누르고 있으면 커서가 움직여요");
+      return true;
+    }
+    // iOS 17+/27: 설정에 Motion 메뉴 없음. '한 번 뜨는 팝업'이 전부. 거부/미표시면 사이트 데이터 삭제로 리셋.
+    alert(
+      "모션 권한을 받지 못했어요.\n\n" +
+      "iOS 17 이상은 Safari 설정에 '동작 및 방향' 메뉴가 없고, 첫 탭 때 뜨는 팝업으로만 허용합니다.\n" +
+      "팝업이 안 떴거나 이전에 '허용 안 함'을 눌렀다면, 이 사이트 권한을 초기화하세요:\n" +
+      "  설정 → 앱 → Safari → 고급 → 웹사이트 데이터 → 이 주소 찾아 삭제\n" +
+      "→ 페이지 새로고침 후 에어 버튼을 한 번 '탭'(짧게).\n\n" +
+      "[진단] " + location.protocol + " · secure=" + window.isSecureContext + " · " + perm.detail
+    );
+    return false;
+  }
   if (airBtn) {
-    airBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); airStart(); });
+    airBtn.style.touchAction = "none";
+    // 탭(click) = 권한 요청. iOS가 확실히 user-activation으로 인정하는 제스처.
+    airBtn.addEventListener("click", () => { if (!airGranted) ensureMotionPermission(); });
+    // 누르고 있기 = 이동 (권한 있을 때만). 권한 없으면 무시 → 위 click이 먼저 권한 받게 함.
+    airBtn.addEventListener("pointerdown", (e) => { if (!airGranted) return; e.preventDefault(); airStart(); });
     airBtn.addEventListener("pointerup", airStop);
     airBtn.addEventListener("pointercancel", airStop);
   }
