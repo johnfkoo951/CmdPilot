@@ -58,10 +58,16 @@
       <button data-tab="term">터미널</button>
     </div>
     <span class="dock-bar-spacer"></span>
-    <div class="dock-seg dock-splits" id="dock-splits" aria-label="트랙패드 크기">
-      <button data-split="small" aria-label="트랙패드 작게">◱ 작게</button>
-      <button data-split="balance" aria-label="트랙패드 균형">▣ 균형</button>
-      <button data-split="large" aria-label="트랙패드 크게">◲ 크게</button>
+    <!-- 컴패니언 슬롯(왼쪽/위)에 무엇을 둘지: 트랙패드 · 키보드 · 없음(활성 패널 풀) -->
+    <div class="dock-seg" id="dock-companion" aria-label="컴패니언 슬롯">
+      <button data-comp="trackpad" aria-label="컴패니언 트랙패드">🖱️ 트랙패드</button>
+      <button data-comp="keyboard" aria-label="컴패니언 키보드">⌨️ 키보드</button>
+      <button data-comp="none" aria-label="컴패니언 없음">⛶ 없음</button>
+    </div>
+    <div class="dock-seg dock-splits" id="dock-splits" aria-label="컴패니언 크기">
+      <button data-split="small" aria-label="컴패니언 작게">◱ 작게</button>
+      <button data-split="balance" aria-label="컴패니언 균형">▣ 균형</button>
+      <button data-split="large" aria-label="컴패니언 크게">◲ 크게</button>
     </div>
   </div>
 
@@ -156,13 +162,16 @@
       <div class="mirror-bar">
         <span id="mirror-status">연결 대기…</span>
         <span style="flex:1"></span>
+        <button id="mirror-kbd" class="mirror-btn">⌨ 키보드</button>
         <button id="mirror-full" class="mirror-btn">전체화면</button>
         <button id="mirror-fit" class="mirror-btn">맞춤</button>
       </div>
       <div id="mirror-monitors" class="mirror-monitors"></div>
-      <div id="mirror-stage" tabindex="0">
+      <div id="mirror-stage">
         <canvas id="mirror-canvas"></canvas>
         <div id="mirror-hint">화면 탭=클릭 · 길게=우클릭 · 드래그=이동 · 두 손가락=스크롤</div>
+        <!-- 물리·소프트 키보드 텍스트는 항상 이 진짜 input 으로만 받는다 (IME 조합 → 완성형만 전송) -->
+        <input id="mirror-input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-label="미러 키보드 입력">
       </div>
       <button id="mirror-exit" aria-label="전체화면 종료">✕ 나가기</button>
     </section>
@@ -179,7 +188,7 @@
         <button class="term-key" data-seq="&#x1b;[B">↓</button>
         <button class="term-key" data-seq="&#x0d;">⏎</button>
       </div>
-      <div id="term-screen" class="term-screen" tabindex="0"></div>
+      <div id="term-screen" class="term-screen"></div>
       <input id="term-input" class="term-input" placeholder="여기에 입력…" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
     </section>
 

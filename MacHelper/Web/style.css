@@ -274,7 +274,10 @@ html.docked #tp-sheet {
 /* 분할 비율은 JS가 공급하는 --tp-fr(트랙패드) / --panel-fr(패널) fr 값으로 결정.
    중간 14px 트랙 = 드래그 분할선(#dock-splitter). 트랙패드 최소 크기는 JS 클램프(≥0.3)로 보장. */
 html.docked main { gap: 0; }
-/* 가로: 좌 트랙패드 · 분할선 · 우 활성 패널 */
+
+/* ── 컴패니언 슬롯(왼쪽=가로 / 위쪽=세로): 트랙패드 · 키보드 · 없음 ──
+   그리드 [컴패니언 | 분할선 | 활성 패널] 3칸. 컴패니언 크기 --tp-fr, 활성 패널 --panel-fr. */
+/* 가로: 컴패니언 좌 · 분할선 · 활성 패널 우 */
 html.docked.orient-land main {
   grid-template-columns: minmax(0, var(--tp-fr, 42fr)) 14px minmax(0, var(--panel-fr, 58fr));
   grid-template-rows: 1fr;
@@ -282,7 +285,8 @@ html.docked.orient-land main {
 html.docked.orient-land #tp-sheet      { grid-column: 1; grid-row: 1; }
 html.docked.orient-land #dock-splitter { grid-column: 2; grid-row: 1; }
 html.docked.orient-land .panel         { grid-column: 3; grid-row: 1; overflow-y: auto; }
-/* 세로: 위 활성 패널 · 분할선 · 아래 트랙패드 */
+html.docked.orient-land.dock-comp-keyboard #panel-keyboard { grid-column: 1; grid-row: 1; }
+/* 세로: 활성 패널 위 · 분할선 · 컴패니언 아래 */
 html.docked.orient-port main {
   grid-template-columns: 1fr;
   grid-template-rows: minmax(0, var(--panel-fr, 58fr)) 14px minmax(0, var(--tp-fr, 42fr));
@@ -290,6 +294,20 @@ html.docked.orient-port main {
 html.docked.orient-port .panel         { grid-column: 1; grid-row: 1; overflow-y: auto; }
 html.docked.orient-port #dock-splitter { grid-column: 1; grid-row: 2; }
 html.docked.orient-port #tp-sheet      { grid-column: 1; grid-row: 3; }
+html.docked.orient-port.dock-comp-keyboard #panel-keyboard { grid-column: 1; grid-row: 3; }
+
+/* 컴패니언 = 키보드: 트랙패드 숨기고 #panel-keyboard 를 비활성이어도 상시 표시 */
+html.docked.dock-comp-keyboard #tp-sheet       { display: none; }
+html.docked.dock-comp-keyboard #panel-keyboard { display: flex; }
+
+/* 컴패니언 = 없음: 트랙패드·분할선 제거, 활성 패널 풀폭/풀높이 (미러 크게) */
+html.docked.dock-comp-none #tp-sheet,
+html.docked.dock-comp-none #dock-splitter { display: none !important; }
+html.docked.dock-comp-none #dock-splits    { display: none; }
+html.docked.dock-comp-none.orient-land main  { grid-template-columns: 1fr; }
+html.docked.dock-comp-none.orient-land .panel { grid-column: 1; }
+html.docked.dock-comp-none.orient-port main  { grid-template-rows: 1fr; }
+html.docked.dock-comp-none.orient-port .panel { grid-row: 1; }
 /* 도킹 시 핸들 = 드래그 손잡이가 아니라 제목 바 */
 html.docked #tp-handle { flex-basis: auto; height: 30px; border-radius: 14px 14px 0 0; box-shadow: none; touch-action: auto; }
 html.docked #tp-handle .grab { display: none; }
@@ -412,5 +430,16 @@ html.kb-open .panel { padding-bottom: 8px; }             /* 트랙패드 핸들 
 html.kb-open #panel-term .term-screen { margin-top: 6px; }
 
 /* 물리 키보드 직접 입력 대상(포커스) 표시 (C·D) */
-#term-screen:focus, #mirror-stage:focus,
-#term-screen:focus-visible, #mirror-stage:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* 미러 IME 캡처 input — 평소 1px 투명(포커스·조합 가능), 포커스 시 하단 조합 바로 확대 */
+#mirror-input {
+  position: absolute; left: 8px; right: 8px; bottom: 8px;
+  height: 1px; padding: 0; margin: 0; border: none; border-radius: 8px;
+  opacity: 0; z-index: 3; pointer-events: none;      /* 캔버스 탭을 가로채지 않음 (focus 는 JS 로) */
+  font-size: 16px;                                    /* iOS 자동 확대 방지 */
+  background: rgba(0,0,0,.62); color: #fff; caret-color: var(--accent);
+  -webkit-user-select: text; user-select: text;
+}
+#mirror-input:focus { height: 40px; padding: 8px 12px; opacity: 1; outline: none; border: 1px solid var(--accent); }
+#mirror-kbd.on { background: var(--accent); color: var(--accent-text); }
+/* 물리 키보드 대상 표시(터미널 입력창) */
+#term-input:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
