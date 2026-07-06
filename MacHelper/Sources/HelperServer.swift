@@ -280,6 +280,21 @@ final class HelperServer: ObservableObject {
             // 발표 스팟라이트 토글 (덱 launch 스키마를 그대로 쓰는 내부 액션)
             SpotlightOverlay.shared.toggle()
             return
+        case "window":
+            // 앱 내 창 전환 — 순수 AX(손쉬운 사용 권한만). AX 호출이 블록될 수 있어 전용 큐에서.
+            let next = command.dir != "prev"
+            DispatchQueue.global(qos: .userInitiated).async { [weak client] in
+                let result = WindowSwitcher.cycle(next: next)
+                let json: String
+                switch result {
+                case .ok(let n):       json = "{\"t\":\"window\",\"ok\":true,\"count\":\(n)}"
+                case .single:          json = "{\"t\":\"window\",\"ok\":false,\"reason\":\"single\"}"
+                case .none:            json = "{\"t\":\"window\",\"ok\":false,\"reason\":\"none\"}"
+                case .axError(let c):  json = "{\"t\":\"window\",\"ok\":false,\"reason\":\"axerr\",\"code\":\(c)}"
+                }
+                client?.sendText(json)
+            }
+            return
         default:
             break
         }

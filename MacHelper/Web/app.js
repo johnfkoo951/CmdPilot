@@ -30,6 +30,12 @@
         } else if (m.t === "apps") {
           installedApps = m.list || [];
           if (appsPickerRefresh) appsPickerRefresh();
+        } else if (m.t === "window") {
+          if (m.ok === false) {
+            if (m.reason === "single") toast("이 앱은 창이 하나뿐이에요");
+            else if (m.reason === "none") toast("전환할 창이 없어요");
+            else toast("창 전환 실패" + (m.code ? " (" + m.code + ")" : ""));
+          }
         } else if (m.t === "cmux") {
           const snapshot = JSON.stringify(m);
           if (snapshot !== lastCmuxJSON) {   // 변경 없으면 리렌더 생략 (폴링 깜빡임 방지)
@@ -140,6 +146,7 @@
     if (settings.pointerHz === tier.pointerHz && settings.pointerSmoothing === tier.pointerSmoothing) return;
     settings.pointerHz = tier.pointerHz;
     settings.pointerSmoothing = tier.pointerSmoothing;
+    tuneEuroFromSettings();
     if (networkUIRefresh) networkUIRefresh();
   }
   let settings = loadSettings();
@@ -174,6 +181,7 @@
     settings.pointerHz = preset.pointerHz;
     settings.pointerSmoothing = preset.pointerSmoothing;
     settings.resolutionScale = preset.resolutionScale;
+    tuneEuroFromSettings();
   }
   if (settings.networkPreset && settings.networkPreset !== "manual") applyNetworkPreset(settings.networkPreset);
   // 예전 기본값(balanced)으로 저장된 기기를 자동 프리셋으로 1회 이관
@@ -193,32 +201,116 @@
   setAppHeight();
   window.addEventListener("resize", setAppHeight);
 
-  // ───────── 화면 모드 (자동 / 폰 / 태블릿) ─────────
-  // 태블릿(갤럭시 탭 등)·와이드 화면이면 html.wide → 덱 4열, 패널 폭 제한, 페이지당 12버튼.
-  // 설정에서 강제 선택 가능 (자동은 화면 폭 640px 기준).
-  function isWide() {
-    const m = settings.layoutMode || "auto";
-    if (m === "tablet") return true;
-    if (m === "phone") return false;
-    return window.innerWidth >= 640;
+  // ───────── 기기 구분 (phone / tablet-sm / tablet-lg × 가로·세로 × 도킹) ─────────
+  //  · 긴 변(=Math.max(screen.w,screen.h)) — 회전 불변, 기기 크기 판별에 안정적
+  //    iPhone ≤ ~932 / iPad mini 1133 / iPad·11" 1180~1194 / 12.9"·13" 1366
+  //  · 도킹(멀티패널): 태블릿이고 짧은 뷰포트 변 ≥ 680px → 트랙패드+패널 동시 배치
+  //  · 강제모드: settings.layoutMode = auto | phone | tablet
+  let deckCols = 3, deckRows = 3;
+  function classifyDevice() {
+    const longest = Math.max(screen.width || 0, screen.height || 0, window.innerWidth);
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const land = vw >= vh;
+    const mode = settings.layoutMode || "auto";
+    let cls;
+    if (mode === "phone") cls = "phone";
+    else if (mode === "tablet") cls = longest >= 1151 ? "tablet-lg" : "tablet-sm";
+    else if (longest <= 950) cls = "phone";        // iPhone (Pro Max 긴 변 932)
+    else if (longest <= 1150) cls = "tablet-sm";   // iPad mini(1133)·소형
+    else cls = "tablet-lg";                        // iPad·11"·12.9" Pro
+    const isTablet = cls !== "phone";
+    const docked = isTablet && Math.min(vw, vh) >= 680;
+    return { cls, land, docked };
   }
-  function applyLayoutMode() { document.documentElement.classList.toggle("wide", isWide()); }
-  applyLayoutMode();
-  window.addEventListener("resize", () => {
-    const was = document.documentElement.classList.contains("wide");
-    applyLayoutMode();
-    if (was !== document.documentElement.classList.contains("wide")) renderDeck();
-  });
+  function deckGrid(cls, land) {
+    if (cls === "tablet-lg") return land ? { cols: 5, rows: 4 } : { cols: 7, rows: 6 };
+    if (cls === "tablet-sm") return land ? { cols: 4, rows: 3 } : { cols: 5, rows: 5 };
+    return { cols: 3, rows: 3 };                   // phone
+  }
+  function isDocked() { return document.documentElement.classList.contains("docked"); }
+  function applyDeviceClass(initial) {
+    const { cls, land, docked } = classifyDevice();
+    const root = document.documentElement;
+    const sig = cls + (land ? "L" : "P") + (docked ? "D" : "_");
+    if (root.__layoutSig === sig) return;          // 변화 없으면 리렌더 생략(리사이즈 깜빡임 방지)
+    const wasDocked = root.classList.contains("docked");
+    root.__layoutSig = sig;
+    root.classList.toggle("phone",     cls === "phone");
+    root.classList.toggle("tablet-sm", cls === "tablet-sm");
+    root.classList.toggle("tablet-lg", cls === "tablet-lg");
+    root.classList.toggle("tablet",    cls !== "phone");
+    root.classList.toggle("wide",      cls !== "phone");   // 기존 html.wide 규칙 하위호환
+    root.classList.toggle("orient-land", land);
+    root.classList.toggle("orient-port", !land);
+    root.classList.toggle("docked",    docked);
+    const g = deckGrid(cls, land);
+    deckCols = g.cols; deckRows = g.rows;
+    root.style.setProperty("--deck-cols", deckCols);
+    if (docked && !wasDocked) { sheetEl.style.transition = "none"; sheetEl.style.transform = "none"; }
+    if (!docked && wasDocked) { sheetReflow(); }
+    if (!initial) renderDeck();
+  }
+  // 초기 적용은 sheetEl 등이 정의된 뒤(파일 끝)에서 호출. 리스너는 런타임에만 발화하므로 여기 등록 OK.
+  window.addEventListener("resize", () => applyDeviceClass(false));
+  window.addEventListener("orientationchange", () => setTimeout(() => applyDeviceClass(false), 60));
 
   // 햅틱 피드백 (안드로이드 Chrome 지원, iOS는 무시됨)
   function buzz() { try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {} }
 
-  // ───────── 모션 전송 큐 ─────────
-  // touchmove 이벤트를 그대로 모두 보내면 네트워크/브라우저 상태에 따라 커서가 덩어리져 보인다.
-  // 프레임 단위로 델타를 모아 일정한 주기로 보내고, 필요 시 잔여 델타를 짧게 분산한다.
-  let motionRAF = null, motionTimer = null, lastMotionFlush = 0;
-  let pendingMove = { dx: 0, dy: 0 }, pendingScroll = { dx: 0, dy: 0 }, smoothCarry = { dx: 0, dy: 0 };
+  // 간단 토스트 (창전환 실패 등 안내)
+  let toastTimer = null;
+  function toast(msg) {
+    let el = document.getElementById("toast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "toast";
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 1900);
+  }
+
   function clampNum(v, min, max) { return Math.max(min, Math.min(max, Number(v) || 0)); }
+
+  // ───────── one-euro 포인터 필터 (지터 제거 · 지연 0) ─────────
+  // 정지·저속엔 강하게 스무딩(손떨림/센서 양자화 제거), 플릭엔 컷오프↑로 원본 통과(지연 0).
+  // 상대 포인터라 델타 누적합(raw 위치)을 필터링 → 필터 위치의 차분을 델타로 보냄(스트로크마다 리셋).
+  class LowPass {
+    constructor() { this.s = null; this.init = false; }
+    filter(x, a) { this.s = this.init ? a * x + (1 - a) * this.s : x; this.init = true; return this.s; }
+    reset() { this.s = null; this.init = false; }
+  }
+  class OneEuro {
+    constructor(mc, beta, dc) { this.mc = mc; this.beta = beta; this.dc = dc; this.xf = new LowPass(); this.dxf = new LowPass(); this.tPrev = null; this.xPrev = 0; }
+    alpha(cut, dt) { const tau = 1 / (2 * Math.PI * cut); return 1 / (1 + tau / dt); }
+    filter(x, t) {
+      if (this.tPrev === null) { this.tPrev = t; this.xPrev = x; return this.xf.filter(x, 1); }
+      let dt = t - this.tPrev; if (dt <= 0) dt = 1e-3; this.tPrev = t;
+      const dx = (x - this.xPrev) / dt; this.xPrev = x;
+      const edx = this.dxf.filter(dx, this.alpha(this.dc, dt));
+      const cut = this.mc + this.beta * Math.abs(edx);
+      return this.xf.filter(x, this.alpha(cut, dt));
+    }
+    reset() { this.xf.reset(); this.dxf.reset(); this.tPrev = null; this.xPrev = 0; }
+    tune(mc, beta) { this.mc = mc; this.beta = beta; }
+  }
+  let euroX = new OneEuro(1.0, 0.02, 1.0), euroY = new OneEuro(1.0, 0.02, 1.0);
+  let rawX = 0, rawY = 0, filtLastX = 0, filtLastY = 0;
+  function resetMotionFilter() { euroX.reset(); euroY.reset(); rawX = rawY = filtLastX = filtLastY = 0; }
+  // pointerSmoothing(0~0.45) → 필터 강도. 불안정망일수록 컷오프↓(더 부드럽게)
+  function tuneEuroFromSettings() {
+    const s = clampNum(settings.pointerSmoothing || 0.1, 0, 0.45);
+    const mc = Math.max(0.5, 2.2 - s * 5.0);     // s=0→2.2Hz, s=0.26→0.9Hz
+    const beta = Math.max(0.006, 0.03 - s * 0.05);
+    euroX.tune(mc, beta); euroY.tune(mc, beta);
+  }
+
+  // ───────── 모션 전송 큐 ─────────
+  // 프레임 단위로 델타를 모아 일정 주기로 전송. 스무딩은 위 1€ 필터가 담당(분수-carry 제거).
+  let motionRAF = null, motionTimer = null, lastMotionFlush = 0;
+  let pendingMove = { dx: 0, dy: 0 }, pendingScroll = { dx: 0, dy: 0 };
   function motionInterval() { return 1000 / clampNum(settings.pointerHz || 60, 24, 120); }
   function motionScale() { return clampNum(settings.resolutionScale || 1, 0.5, 2); }
   function scheduleMotion() {
@@ -231,8 +323,12 @@
   }
   function queueMove(dx, dy) {
     const scale = motionScale();
-    pendingMove.dx += dx * scale;
-    pendingMove.dy += dy * scale;
+    const t = performance.now() / 1000;
+    rawX += dx * scale; rawY += dy * scale;
+    const fx = euroX.filter(rawX, t), fy = euroY.filter(rawY, t);   // 1€ 필터 경유
+    pendingMove.dx += fx - filtLastX;
+    pendingMove.dy += fy - filtLastY;
+    filtLastX = fx; filtLastY = fy;
     scheduleMotion();
   }
   function queueScroll(dx, dy) {
@@ -244,38 +340,24 @@
     if (motionTimer) { clearTimeout(motionTimer); motionTimer = null; }
     if (motionRAF) { cancelAnimationFrame(motionRAF); motionRAF = null; }
     if (immediate) {
-      if (Math.abs(pendingMove.dx) > 0.01 || Math.abs(pendingMove.dy) > 0.01) send({ t: "move", dx: pendingMove.dx + smoothCarry.dx, dy: pendingMove.dy + smoothCarry.dy });
+      if (Math.abs(pendingMove.dx) > 0.01 || Math.abs(pendingMove.dy) > 0.01) send({ t: "move", dx: pendingMove.dx, dy: pendingMove.dy });
       if (Math.abs(pendingScroll.dx) > 0.01 || Math.abs(pendingScroll.dy) > 0.01) send({ t: "scroll", dx: pendingScroll.dx, dy: pendingScroll.dy });
-      pendingMove = { dx: 0, dy: 0 }; pendingScroll = { dx: 0, dy: 0 }; smoothCarry = { dx: 0, dy: 0 };
+      pendingMove = { dx: 0, dy: 0 }; pendingScroll = { dx: 0, dy: 0 };
       lastMotionFlush = performance.now();
       return;
     }
     flushMotionFrame(performance.now());
   }
   function flushMotionFrame(t) {
-    motionRAF = null;
+    motionRAF = null; motionTimer = null;
     lastMotionFlush = t || performance.now();
-
     if (Math.abs(pendingScroll.dx) > 0.01 || Math.abs(pendingScroll.dy) > 0.01) {
       send({ t: "scroll", dx: pendingScroll.dx, dy: pendingScroll.dy });
       pendingScroll = { dx: 0, dy: 0 };
     }
-
-    const rawDx = pendingMove.dx + smoothCarry.dx;
-    const rawDy = pendingMove.dy + smoothCarry.dy;
-    pendingMove = { dx: 0, dy: 0 };
-    smoothCarry = { dx: 0, dy: 0 };
-    if (Math.abs(rawDx) > 0.01 || Math.abs(rawDy) > 0.01) {
-      const s = clampNum(settings.pointerSmoothing || 0, 0, 0.45);
-      const outDx = rawDx * (1 - s);
-      const outDy = rawDy * (1 - s);
-      const carryDx = rawDx - outDx;
-      const carryDy = rawDy - outDy;
-      send({ t: "move", dx: outDx, dy: outDy });
-      if (Math.hypot(carryDx, carryDy) > 0.03) {
-        smoothCarry = { dx: carryDx, dy: carryDy };
-        scheduleMotion();
-      }
+    if (Math.abs(pendingMove.dx) > 0.01 || Math.abs(pendingMove.dy) > 0.01) {
+      send({ t: "move", dx: pendingMove.dx, dy: pendingMove.dy });   // 1€가 이미 스무딩함
+      pendingMove = { dx: 0, dy: 0 };
     }
   }
 
@@ -340,6 +422,7 @@
   function sheetOpenNow() { return sheetPos < 1; }
   function closedOffset() { return Math.max(mainEl.clientHeight - HANDLE_H, 0); }
   function applySheet(off, animate) {
+    if (isDocked()) return;   // 도킹(태블릿) 중엔 CSS 그리드가 위치 담당
     sheetCurOff = off;
     sheetEl.style.transition = animate ? "transform .25s cubic-bezier(.2,.8,.2,1)" : "none";
     sheetEl.style.transform = "translateY(" + off + "px)";
@@ -350,6 +433,7 @@
     return best;
   }
   function setSheetPos(pos, animate) {
+    if (isDocked()) { sheetEl.style.transform = "none"; return; }   // 도킹 중 no-op
     sheetPos = pos;
     applySheet(pos * closedOffset(), animate !== false);
     sheetHandle.classList.toggle("open", pos < 1);
@@ -357,9 +441,16 @@
     settings.sheetPos = pos;
     saveSettings();
   }
-  function setSheet(open) { setSheetPos(open ? (settings.sheetOpenPos != null ? settings.sheetOpenPos : 0) : 1); }
-  function sheetReflow() { applySheet(sheetPos * closedOffset(), false); }
+  function setSheet(open) {
+    if (isDocked()) return;   // 도킹 중엔 트랙패드 상시 표시(탭 전환은 패널만 교체)
+    setSheetPos(open ? (settings.sheetOpenPos != null ? settings.sheetOpenPos : 0) : 1);
+  }
+  function sheetReflow() {
+    if (isDocked()) { sheetEl.style.transform = "none"; return; }
+    applySheet(sheetPos * closedOffset(), false);
+  }
   sheetHandle.addEventListener("touchstart", (e) => {
+    if (isDocked()) return;
     sheetDrag = { y: e.touches[0].clientY, startOff: sheetPos * closedOffset(), moved: false };
   }, { passive: true });
   sheetHandle.addEventListener("touchmove", (e) => {
@@ -496,6 +587,7 @@
     }
     airActive = true;
     airPrevOrient = null;
+    resetMotionFilter();   // 에어마우스 시작 — 1€ 리셋
     buzz();
     airBtn.classList.add("held");
     airStatus("대기…");
@@ -765,7 +857,7 @@
     ]};
   }
 
-  function pageSize() { return document.documentElement.classList.contains("wide") ? 12 : 9; }
+  function pageSize() { return Math.max(1, deckCols * deckRows); }
   const pagesEl = document.getElementById("deck-pages");
   const dotsEl = document.getElementById("page-dots");
   const tabsEl = document.getElementById("folder-tabs");
@@ -1277,7 +1369,7 @@
       b.classList.toggle("on", b.dataset.lay === (settings.layoutMode || "auto"));
       b.addEventListener("click", () => {
         settings.layoutMode = b.dataset.lay;
-        saveSettings(); applyLayoutMode(); renderDeck();
+        saveSettings(); document.documentElement.__layoutSig = ""; applyDeviceClass(false); renderDeck();
         modalRoot.querySelectorAll("#set-layout button").forEach((x) => x.classList.toggle("on", x === b));
       });
     });
@@ -1381,6 +1473,7 @@
       startTime = now(); moved = false; maxTouches = 1; dragging = false;
       threeMode = false; g3fired = false; g3start = null; g3last = null; twoMode = null;
       last = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      resetMotionFilter();   // 스트로크 시작 — 1€ 속도 스파이크 방지
       armedForDrag = !buttonHeld() && (now() - lastTapEnd) < DOUBLE_MS;
     } else { maxTouches = Math.max(maxTouches, n); armedForDrag = false; }
     if (n === 2) { twoMode = null; d0 = dist2(e.touches); c0 = centroid(e.touches); lastZoomDist = d0; }
@@ -1459,6 +1552,7 @@
     last = null; lastCentroid = null; maxTouches = 0; armedForDrag = false;
   }, { passive: false });
 
+  applyDeviceClass(true);               // 기기 구분/도킹 클래스 (sheetEl 정의 후 안전)
   renderDeck();
   setSheetPos(sheetPos, false);         // 시작 시 기억된 높이로 (기본: 풀화면)
   connect();

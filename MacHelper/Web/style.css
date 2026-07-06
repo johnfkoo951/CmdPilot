@@ -249,13 +249,57 @@ textarea.ed-input { min-height: 80px; resize: none; }
 .cap-result textarea { width: 100%; min-height: 130px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 14px; -webkit-user-select: text; user-select: text; }
 .cap-note { font-size: 12px; color: var(--text-mute); text-align: center; margin: 8px 0 4px; }
 
-/* ───────── 와이드(태블릿) 모드: html.wide — 설정 '화면 모드'에서 선택 (자동=폭 640px) ───────── */
+/* ───────── 와이드(태블릿) 모드: html.wide ───────── */
 html.wide .panel { max-width: 840px; margin: 0 auto; }
-html.wide .deck-page { grid-template-columns: repeat(4, 1fr); }
+/* 덱 그리드: JS가 --deck-cols 공급 (기존 html.wide 고정 4열 대체) */
+.deck-page { grid-template-columns: repeat(var(--deck-cols, 3), 1fr); }
 html.wide .agent-grid.g2 { grid-template-columns: repeat(3, 1fr); }
 html.wide #quickbar { padding: 8px 16px; justify-content: center; }
 html.wide #quickbar button { max-width: 140px; }
 html.wide #click-bar { width: 100%; max-width: 840px; margin: 0 auto; }
+
+/* ═════════ 태블릿 멀티패널(도킹) — iPad Pro/mini 가로·세로 ═════════ */
+/* main 을 2칸 그리드로. 비활성 패널은 display:none → 그리드에서 빠짐. 활성 패널 1 + 트랙패드 1 = 2칸. */
+html.docked .panel { max-width: none; margin: 0; }
+html.docked main {
+  display: grid; gap: 10px; overflow: hidden;
+  padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+}
+html.docked .panel { position: static; inset: auto; padding: 0; }
+html.docked #tp-sheet {
+  position: static; inset: auto; z-index: auto;
+  transform: none !important; background: transparent; overflow: hidden;
+}
+/* 가로: 좌 트랙패드(넓게) · 우 활성 패널 */
+html.docked.orient-land main { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: 1fr; }
+html.docked.orient-land #tp-sheet { grid-column: 1; grid-row: 1; }
+html.docked.orient-land .panel    { grid-column: 2; grid-row: 1; overflow-y: auto; }
+html.docked.tablet-lg.orient-land main { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+/* 세로: 위 활성 패널 · 아래 트랙패드 */
+html.docked.orient-port main { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1.05fr); }
+html.docked.orient-port .panel    { grid-column: 1; grid-row: 1; overflow-y: auto; }
+html.docked.orient-port #tp-sheet { grid-column: 1; grid-row: 2; }
+html.docked.tablet-lg.orient-port main { grid-template-rows: minmax(0, 1fr) minmax(0, 1.25fr); }
+/* 도킹 시 핸들 = 드래그 손잡이가 아니라 제목 바 */
+html.docked #tp-handle { flex-basis: auto; height: 30px; border-radius: 14px 14px 0 0; box-shadow: none; touch-action: auto; }
+html.docked #tp-handle .grab { display: none; }
+html.docked #tp-handle .lbl::after { content: "" !important; }
+html.docked #tp-sheet #trackpad { margin: 0 0 8px; }
+html.docked #trackpad { border: 1px solid var(--border); }
+html.docked #click-bar { padding: 0; }
+html.docked #quickbar, html.docked #quickbar2 { justify-content: center; }
+html.docked #quickbar button, html.docked #quickbar2 button { max-width: 150px; }
+/* 대형/소형 태블릿: 덱 셀·아이콘 키워 터치 여유 */
+html.tablet-lg .deck-btn { min-height: 92px; font-size: 15px; }
+html.tablet-lg .deck-btn .ic { font-size: 26px; }
+html.tablet-lg .deck-btn .ic-img { width: 34px; height: 34px; }
+html.tablet-sm .deck-btn { min-height: 84px; }
+
+/* 토스트 */
+#toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 78px); transform: translateX(-50%);
+  background: rgba(20,22,28,.94); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px;
+  z-index: 9999; opacity: 0; transition: opacity .18s; pointer-events: none; max-width: 80vw; text-align: center; }
+#toast.show { opacity: 1; }
 
 /* About / 저작권 */
 .about { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 24px 0 6px; }
