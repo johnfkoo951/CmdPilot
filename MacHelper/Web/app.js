@@ -1098,8 +1098,9 @@
     function mFireSwipe() {
       if (mGFired || !mGStart || !mGLast) return;
       const dx = mGLast.x - mGStart.x, dy = mGLast.y - mGStart.y;
-      if (Math.hypot(dx, dy) < SWIPE3_THRESH) return;
-      const dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
+      const adx = Math.abs(dx), ady = Math.abs(dy);
+      if (Math.max(adx, ady) < SWIPE3_THRESH) return;
+      const dir = adx > ady ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
       fireGesture(mGFingers, dir);            // 트랙패드와 공유 헬퍼(런타임 참조 → hoisting OK)
       mGFired = true;
     }
@@ -1971,7 +1972,7 @@
   const ACCEL_CAP = 30;   // 가속 상한(px/이벤트). 배율/가속량/스크롤은 settings 에서 조절
   const TAP_MS = 250, TAP_MOVE = 8, DOUBLE_MS = 300;
   const FRICTION = 0.92, MOMENTUM_MIN = 0.04;
-  const SWIPE3_THRESH = 45, PINCH_DECIDE = 12, ZOOM_STEP = 0.12, SWIPE3_SETTLE = 60;
+  const SWIPE3_THRESH = 34, PINCH_DECIDE = 12, ZOOM_STEP = 0.12, SWIPE3_SETTLE = 55;
 
   const pad = document.getElementById("trackpad");
   let startTime = 0, moved = false, maxTouches = 0;
@@ -2005,8 +2006,10 @@
     none: { label: "없음", run: () => {} },
     back: { label: "뒤로 (⌘←)", run: () => send({ t: "key", keyCode: 123, mods: ["command"] }) },
     forward: { label: "앞으로 (⌘→)", run: () => send({ t: "key", keyCode: 124, mods: ["command"] }) },
-    mission: { label: "미션 컨트롤", run: () => send({ t: "launch", target: "/System/Applications/Mission Control.app" }) },
+    mission: { label: "미션 컨트롤 (⌃↑)", run: () => send({ t: "key", keyCode: 126, mods: ["control"] }) },
     expose: { label: "앱 엑스포제 (⌃↓)", run: () => send({ t: "key", keyCode: 125, mods: ["control"] }) },
+    spaceLeft: { label: "데스크탑 ← (⌃←)", run: () => send({ t: "key", keyCode: 123, mods: ["control"] }) },
+    spaceRight: { label: "데스크탑 → (⌃→)", run: () => send({ t: "key", keyCode: 124, mods: ["control"] }) },
     appswitch: { label: "앱 전환 (⌘⇥)", run: () => send({ t: "key", keyCode: 48, mods: ["command"] }) },
     tabPrev: { label: "이전 탭 (⇧⌘[)", run: () => send({ t: "key", keyCode: 33, mods: ["command", "shift"] }) },
     tabNext: { label: "다음 탭 (⇧⌘])", run: () => send({ t: "key", keyCode: 30, mods: ["command", "shift"] }) },
@@ -2023,12 +2026,20 @@
     ["s3left", "3손가락 ←"], ["s3right", "3손가락 →"], ["s3up", "3손가락 ↑"], ["s3down", "3손가락 ↓"],
     ["s4left", "4손가락 ←"], ["s4right", "4손가락 →"], ["s4up", "4손가락 ↑"], ["s4down", "4손가락 ↓"]
   ];
+  // 매직 트랙패드 표준 배치: 3손가락=탐색/탭, 4손가락=공간/미션컨트롤/엑스포제
   const DEFAULT_GESTURES = {
-    s3left: "back", s3right: "forward", s3up: "mission", s3down: "expose",
-    s4left: "tabPrev", s4right: "tabNext", s4up: "appswitch", s4down: "presSpot"
+    s3left: "back", s3right: "forward", s3up: "tabPrev", s3down: "tabNext",
+    s4left: "spaceLeft", s4right: "spaceRight", s4up: "mission", s4down: "expose"
   };
-  if (!settings.gestures) settings.gestures = {};
-  settings.gestures = Object.assign({}, DEFAULT_GESTURES, settings.gestures);
+  // 기본 매핑 개정 시 1회 재시드(옛 기본값 사용자를 새 표준으로 갱신). 이후 버전에선 커스텀 보존.
+  const GESTURES_VERSION = 2;
+  if (settings.gesturesVersion !== GESTURES_VERSION) {
+    settings.gestures = Object.assign({}, DEFAULT_GESTURES);   // 새 표준으로 1회 리셋
+    settings.gesturesVersion = GESTURES_VERSION;
+    saveSettings();
+  } else {
+    settings.gestures = Object.assign({}, DEFAULT_GESTURES, settings.gestures);   // 커스텀 병합
+  }
 
   let gFingers = 3;   // 이번 제스처의 손가락 수 (3 또는 4+)
   // 트랙패드·미러 공유: 손가락 수+방향 → 배정된 제스처 실행 (GESTURE_ACTIONS는 런타임 참조)
@@ -2040,8 +2051,9 @@
   function fireSwipeIfNeeded() {
     if (g3fired || !g3start || !g3last) return;
     const dx = g3last.x - g3start.x, dy = g3last.y - g3start.y;
-    if (Math.hypot(dx, dy) < SWIPE3_THRESH) return;
-    const dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+    if (Math.max(adx, ady) < SWIPE3_THRESH) return;   // 우세축 기준 = 상하/좌우 축정렬 스와이프에 민감(매직트랙패드 감도)
+    const dir = adx > ady ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
     flushMotion(true);
     fireGesture(gFingers, dir);
     g3fired = true;
