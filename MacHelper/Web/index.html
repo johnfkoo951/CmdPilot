@@ -14,15 +14,16 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <!-- SF Symbols 풍 인라인 아이콘 스프라이트 (외부 의존성 없음) -->
+  <!-- SF Symbols 톤앤매너 인라인 아이콘 스프라이트 (외부 의존성 0) — viewBox 24x24, 스트로크 규격 통일 -->
   <svg style="display:none" xmlns="http://www.w3.org/2000/svg">
-    <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/></symbol>
-    <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="15" rx="3"/><path d="M7 9.5l3 2.5-3 2.5M13 15h4"/></symbol>
+    <!-- 크롬 아이콘 (stroke = currentColor, 1.8, 둥근 캡/조인) -->
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="19" height="11" rx="2.5"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M6 13.5h.01M18 13.5h.01M9 13.5h6"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="15" rx="3"/><path d="M6.5 9.5l3 2.5-3 2.5M12.5 15h5"/></symbol>
     <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></symbol>
     <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/></symbol>
-    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3L5.5 13.5H11L9.5 21 17.5 10.5H12L13 3z"/></symbol>
-    <symbol id="i-appswitch" viewBox="0 0 24 24"><rect x="3.5" y="7.5" width="12" height="12" rx="2.5"/><path d="M8.5 4h9a3 3 0 0 1 3 3v9"/></symbol>
-    <symbol id="i-mission" viewBox="0 0 24 24"><rect x="2.5" y="6" width="5.4" height="12" rx="1.5"/><rect x="9.3" y="4" width="5.4" height="16" rx="1.5"/><rect x="16.1" y="6" width="5.4" height="12" rx="1.5"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M12.8 2.6 5.6 12.9c-.26.37 0 .87.44.87H10.4l-1 7.6 7.1-10.2c.26-.37 0-.87-.44-.87H11.8l1-7.7Z"/></symbol>
+    <symbol id="i-appswitch" viewBox="0 0 24 24"><rect x="3.5" y="8" width="11.5" height="11.5" rx="2.5"/><path d="M8 8V6.5A2.5 2.5 0 0 1 10.5 4h7A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H15.5"/></symbol>
+    <symbol id="i-mission" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="7" rx="2"/><rect x="3" y="13.5" width="8" height="6" rx="2"/><rect x="13" y="13.5" width="8" height="6" rx="2"/></symbol>
     <symbol id="i-camera" viewBox="0 0 24 24"><path d="M8.2 6l1.2-2h5.2L15.8 6h3.7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.7z"/><circle cx="12" cy="12.5" r="3.5"/></symbol>
     <symbol id="i-vol-down" viewBox="0 0 24 24"><path d="M4.5 9.5v5H8L12.5 19V5L8 9.5H4.5z"/><path d="M15.5 9.2a4.6 4.6 0 0 1 0 5.6"/></symbol>
     <symbol id="i-vol-up" viewBox="0 0 24 24"><path d="M3.5 9.5v5H7L11.5 19V5L7 9.5H3.5z"/><path d="M14.5 9.2a4.6 4.6 0 0 1 0 5.6M17.2 6.6a8.4 8.4 0 0 1 0 10.8"/></symbol>
@@ -30,7 +31,14 @@
     <symbol id="i-sun-min" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 5v1.6M12 17.4V19M5 12h1.6M17.4 12H19"/></symbol>
     <symbol id="i-sun-max" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.8v2M12 19.2v2M2.8 12h2M19.2 12h2M5.5 5.5l1.4 1.4M17.1 17.1l1.4 1.4M18.5 5.5l-1.4 1.4M6.9 17.1l-1.4 1.4"/></symbol>
     <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9.6M18.4 7H20M4 12h3.6M12.4 12H20M4 17h12.1M20.4 17H20"/><circle cx="16" cy="7" r="2.1"/><circle cx="10" cy="12" r="2.1"/><circle cx="18.2" cy="17" r="2.1"/></symbol>
-    <symbol id="i-mirror" viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="12.5" rx="2"/><path d="M8 20.5h8M12 17v3.5"/></symbol>
+    <symbol id="i-mirror" viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="12.5" rx="2.5"/><path d="M9 20.5h6M12 17v3.5"/></symbol>
+    <!-- cmux 터미널 프롬프트 (❯_) -->
+    <symbol id="i-cmux" viewBox="0 0 24 24"><path d="M4.5 6.5l5 5.5-5 5.5M12.5 18.5h7"/></symbol>
+    <!-- 앱 내 창 전환 / 창 되돌리기 (macwindow.on.rectangle 계열) -->
+    <symbol id="i-window-next" viewBox="0 0 24 24"><rect x="2.8" y="7.6" width="12.6" height="11.6" rx="2.4"/><path d="M2.8 10.9h12.6M5.4 9.25h.01M7.4 9.25h.01"/><path d="M8.2 7.6V6.2A2.4 2.4 0 0 1 10.6 3.8h7.2a2.4 2.4 0 0 1 2.4 2.4v7.2a2.4 2.4 0 0 1-2.4 2.4H16"/></symbol>
+    <symbol id="i-window-back" viewBox="0 0 24 24"><rect x="2.6" y="4.6" width="18.8" height="14.8" rx="2.6"/><path d="M2.6 8.3h18.8M5.4 6.45h.01M7.4 6.45h.01"/><path d="M13.2 16l-2.5-2.5 2.5-2.5M10.7 13.5h4.3a2.2 2.2 0 0 1 0 4.4h-.6"/></symbol>
+    <!-- Obsidian 공식 로고 (파셋 크리스탈) — fill = currentColor 모노톤. .icn.solid 로 렌더 -->
+    <symbol id="i-obsidian" viewBox="0 0 24 24"><path d="M19.355 18.538a68.967 68.959 0 0 0 1.858-2.954.81.81 0 0 0-.062-.9c-.516-.685-1.504-2.075-2.042-3.362-.553-1.321-.636-3.375-.64-4.377a1.707 1.707 0 0 0-.358-1.05l-3.198-4.064a3.744 3.744 0 0 1-.076.543c-.106.503-.307 1.004-.536 1.5-.134.29-.29.6-.446.914l-.31.626c-.516 1.068-.997 2.227-1.132 3.59-.124 1.26.046 2.73.815 4.481.128.011.257.025.386.044a6.363 6.363 0 0 1 3.326 1.505c.916.79 1.744 1.922 2.415 3.5zM8.199 22.569c.073.012.146.02.22.02.78.024 2.095.092 3.16.29.87.16 2.593.64 4.01 1.055 1.083.316 2.198-.548 2.355-1.664.114-.814.33-1.735.725-2.58l-.01.005c-.67-1.87-1.522-3.078-2.416-3.849a5.295 5.295 0 0 0-2.778-1.257c-1.54-.216-2.952.19-3.84.45.532 2.218.368 4.829-1.425 7.531zM5.533 9.938c-.023.1-.056.197-.098.29L2.82 16.059a1.602 1.602 0 0 0 .313 1.772l4.116 4.24c2.103-3.101 1.796-6.02.836-8.3-.728-1.73-1.832-3.081-2.55-3.831zM9.32 14.01c.615-.183 1.606-.465 2.745-.534-.683-1.725-.848-3.233-.716-4.577.154-1.552.7-2.847 1.235-3.95.113-.235.223-.454.328-.664.149-.297.288-.577.419-.86.217-.47.379-.885.46-1.27.08-.38.08-.72-.014-1.043-.095-.325-.297-.675-.68-1.06a1.6 1.6 0 0 0-1.475.36l-4.95 4.452a1.602 1.602 0 0 0-.513.952l-.427 2.83c.672.59 2.328 2.316 3.335 4.711.09.21.175.43.253.653z"/></symbol>
   </svg>
 
   <header id="bar">
@@ -39,6 +47,23 @@
     <span id="status">연결 중…</span>
     <button id="settings-btn" class="gear" aria-label="설정"><svg class="icn"><use href="#i-sliders"/></svg></button>
   </header>
+
+  <!-- 도킹(태블릿) 레이아웃 컨트롤 바: 패널 배치 + 트랙패드 분할 조절 (도킹 시에만 표시) -->
+  <div id="dock-bar">
+    <div class="dock-seg" id="dock-panels" aria-label="패널 배치">
+      <button data-tab="deck">덱</button>
+      <button data-tab="keyboard">키보드</button>
+      <button data-tab="agent">에이전트</button>
+      <button data-tab="mirror">미러</button>
+      <button data-tab="term">터미널</button>
+    </div>
+    <span class="dock-bar-spacer"></span>
+    <div class="dock-seg dock-splits" id="dock-splits" aria-label="트랙패드 크기">
+      <button data-split="small" aria-label="트랙패드 작게">◱ 작게</button>
+      <button data-split="balance" aria-label="트랙패드 균형">▣ 균형</button>
+      <button data-split="large" aria-label="트랙패드 크게">◲ 크게</button>
+    </div>
+  </div>
 
   <main>
     <!-- 키보드 -->
@@ -131,13 +156,15 @@
       <div class="mirror-bar">
         <span id="mirror-status">연결 대기…</span>
         <span style="flex:1"></span>
+        <button id="mirror-full" class="mirror-btn">전체화면</button>
         <button id="mirror-fit" class="mirror-btn">맞춤</button>
       </div>
       <div id="mirror-monitors" class="mirror-monitors"></div>
-      <div id="mirror-stage">
+      <div id="mirror-stage" tabindex="0">
         <canvas id="mirror-canvas"></canvas>
         <div id="mirror-hint">화면 탭=클릭 · 길게=우클릭 · 드래그=이동 · 두 손가락=스크롤</div>
       </div>
+      <button id="mirror-exit" aria-label="전체화면 종료">✕ 나가기</button>
     </section>
 
     <!-- 터미널 (포커스된 cmux 터미널 화면 — 텍스트 UI만) -->
@@ -168,6 +195,9 @@
         <button id="air-btn" aria-label="에어마우스 (누르고 있는 동안 기울여서 이동)">🛸<span>에어</span></button>
       </div>
     </div>
+
+    <!-- 도킹 분할선(드래그로 트랙패드:패널 비율 조절) — 도킹 시에만 표시 -->
+    <div id="dock-splitter" aria-label="트랙패드 크기 조절"><span class="dock-grip"></span></div>
   </main>
 
   <!-- 퀵바: 자주 쓰는 시스템 단축키 (스트림덱 스타일, 모든 탭에서 상시 노출) -->
@@ -181,11 +211,11 @@
 
   <!-- 퀵바 2줄: 자주 여는 볼트/앱 + 앱내 창 전환 -->
   <div id="quickbar2">
-    <button data-act="launch" data-target="obsidian://open?vault=CMDSPACE_Local_MBP" aria-label="메인 볼트"><span class="qb-ic">💎</span><span>볼트</span></button>
-    <button data-act="launch" data-target="obsidian://open?vault=CMDS_LLM_Wiki" aria-label="위키 볼트"><span class="qb-ic">📚</span><span>위키</span></button>
-    <button data-act="launch" data-target="/Applications/cmux.app" aria-label="cmux"><span class="qb-ic">❯_</span><span>cmux</span></button>
-    <button data-act="window" data-dir="next" aria-label="앱 내 다음 창"><span class="qb-ic">🪟</span><span>창 전환</span></button>
-    <button data-act="window" data-dir="prev" aria-label="앱 내 이전 창"><span class="qb-ic">🔁</span><span>창 ↩</span></button>
+    <button data-act="launch" data-target="obsidian://open?vault=CMDSPACE_Local_MBP" aria-label="메인 볼트"><svg class="icn solid"><use href="#i-obsidian"/></svg><span>볼트</span></button>
+    <button data-act="launch" data-target="obsidian://open?vault=CMDS_LLM_Wiki" aria-label="위키 볼트"><svg class="icn solid"><use href="#i-obsidian"/></svg><span>위키</span></button>
+    <button data-act="launch" data-target="/Applications/cmux.app" aria-label="cmux"><svg class="icn"><use href="#i-cmux"/></svg><span>cmux</span></button>
+    <button data-act="window" data-dir="next" aria-label="앱 내 다음 창"><svg class="icn"><use href="#i-window-next"/></svg><span>창 전환</span></button>
+    <button data-act="window" data-dir="prev" aria-label="앱 내 이전 창"><svg class="icn"><use href="#i-window-back"/></svg><span>창 ↩</span></button>
   </div>
 
   <nav id="tabbar">

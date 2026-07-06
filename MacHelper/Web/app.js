@@ -132,7 +132,8 @@
     airSensitivity: 1.2,   // 에어마우스(자이로) 감도
     sheetPos: 0,        // 트랙패드 시트 위치 (0=풀, 1=닫힘, 중간=부분)
     sheetOpenPos: 0,    // 마지막으로 열어둔 높이
-    layoutMode: "auto"  // 화면 모드: auto(폭 기준) | phone | tablet
+    layoutMode: "auto", // 화면 모드: auto(폭 기준) | phone | tablet
+    dockSplit: 0.42     // 도킹 시 트랙패드가 차지하는 비율(0.3~0.72). 나머지는 패널.
   };
   const NETWORK_PRESETS = {
     auto: { label: "자동" },   // RTT 기반 — 아래 AUTO_TIERS 로 실시간 조정
@@ -207,12 +208,23 @@
   }
   applyTheme();
 
-  // ───────── 실제 가시 높이 추적 ─────────
-  // 사파리(주소창 접힘/펼침)와 홈 화면 웹앱(standalone)의 가시 영역이 달라
-  // 100dvh 만으론 아래가 비거나 잘린다 → JS로 innerHeight 를 CSS 변수로 공급.
+  // ───────── 실제 가시 높이 + 소프트키보드 추적 (A) ─────────
+  // 가시 영역은 visualViewport 기준: 사파리 주소창 접힘/펼침, standalone, 소프트키보드까지 한 번에 반영.
+  // iOS는 소프트키보드가 떠도 innerHeight는 그대로고 visualViewport.height만 줄어든다
+  //  → --app-height = visualViewport.height 로 두면 레이아웃 전체가 '키보드 위 영역'으로 수축.
+  //  → 키보드 높이만큼 CSS가 하단 바를 걷어 입력창을 키보드 바로 위에 고정. fixed body 밀림은 scrollTo로 원복.
   if (navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches)
     document.documentElement.classList.add("standalone");
-  function setAppHeight() { document.documentElement.style.setProperty("--app-height", window.innerHeight + "px"); }
+  const vvp = window.visualViewport;
+  function setAppHeight() {
+    const h = vvp ? vvp.height : window.innerHeight;
+    document.documentElement.style.setProperty("--app-height", Math.round(h) + "px");
+    const kb = vvp ? Math.max(0, window.innerHeight - vvp.height - (vvp.offsetTop || 0)) : 0;
+    document.documentElement.style.setProperty("--kb-height", Math.round(kb) + "px");
+    const open = kb > 100;   // 물리 키보드 후보바(~55px) 제외, 소프트키보드만
+    document.documentElement.classList.toggle("kb-open", open);
+    if (open && vvp && vvp.offsetTop) window.scrollTo(0, 0);   // iOS fixed body 밀림 원복
+  }
   setAppHeight();
   window.addEventListener("resize", setAppHeight);
 
@@ -261,6 +273,7 @@
     const g = deckGrid(cls, land);
     deckCols = g.cols; deckRows = g.rows;
     root.style.setProperty("--deck-cols", deckCols);
+    if (docked) { applyDockSplit(); syncDockBar(currentTab); }   // 분할 비율/패널 배치 반영
     if (docked && !wasDocked) { sheetEl.style.transition = "none"; sheetEl.style.transform = "none"; }
     if (!docked && wasDocked) { sheetReflow(); }
     if (!initial) renderDeck();
@@ -271,6 +284,23 @@
 
   // 햅틱 피드백 (안드로이드 Chrome 지원, iOS는 무시됨)
   function buzz() { try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {} }
+
+  // ───────── 물리 키보드 감지 (소프트키보드와 구분) ─────────
+  // 소프트키보드가 화면에 없는데(visualViewport 축소 없음) 실제 키 이벤트가 오면 물리 키보드로 판정.
+  const HW = { present: false };
+  function softKbHeight() {
+    const vv = window.visualViewport;
+    return vv ? Math.max(0, window.innerHeight - vv.height - (vv.offsetTop || 0)) : 0;
+  }
+  function setPhysicalKB(on) {
+    if (HW.present === on) return;
+    HW.present = on;
+    document.documentElement.classList.toggle("has-hwkb", on);
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.keyCode === 229 || e.key === "Unidentified" || e.key === "Process") return;  // IME/소프트 합성키 제외
+    if (softKbHeight() < 120) setPhysicalKB(true);   // 소프트키보드 없이 온 '실제' 키 = 물리 키보드
+  }, true);
 
   // 간단 토스트 (창전환 실패 등 안내)
   let toastTimer = null;
@@ -411,19 +441,95 @@
 
   // ───────── 탭 전환 ─────────
   const kb = document.getElementById("kb-input");
+  let currentTab = "deck";   // 초기 활성 패널(HTML 기본값)
+  function selectTab(name) {
+    currentTab = name;
+    setSheet(false);   // 탭을 누르면 트랙패드 시트를 내려 해당 탭을 보여줌
+    if (name !== "mirror") exitMirrorFull();   // 미러를 벗어나면 전체화면 해제
+    document.querySelectorAll("#tabbar .tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+    syncDockBar(name);
+    document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "panel-" + name));
+    if (name === "keyboard") setTimeout(() => kb.focus(), 50); else kb.blur();
+    if (name === "deck") renderDeck();
+    if (name === "agent") startCmuxPoll(); else stopCmuxPoll();   // 에이전트 탭 표시 중엔 4초 자동 갱신
+    if (name === "mirror") { mirrorInit(); startMirror(); if (HW.present) { const st = document.getElementById("mirror-stage"); if (st) st.focus(); } } else stopMirror();
+    if (name === "term") { wireTerm(); startTermPoll(); focusTermTarget(); } else stopTermPoll();
+  }
   document.querySelectorAll("#tabbar .tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      const name = tab.dataset.tab;
-      setSheet(false);   // 탭을 누르면 트랙패드 시트를 내려 해당 탭을 보여줌
-      document.querySelectorAll("#tabbar .tab").forEach((t) => t.classList.toggle("active", t === tab));
-      document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "panel-" + name));
-      if (name === "keyboard") setTimeout(() => kb.focus(), 50); else kb.blur();
-      if (name === "deck") renderDeck();
-      if (name === "agent") startCmuxPoll(); else stopCmuxPoll();   // 에이전트 탭 표시 중엔 4초 자동 갱신
-      if (name === "mirror") { mirrorInit(); startMirror(); } else stopMirror();   // 미러 탭 표시 중에만 스트림
-      if (name === "term") { wireTerm(); startTermPoll(); } else stopTermPoll();    // 터미널 탭 표시 중에만 폴링
-    });
+    tab.addEventListener("click", () => selectTab(tab.dataset.tab));
   });
+  function syncDockBar(name) {
+    document.querySelectorAll("#dock-panels button").forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
+  }
+
+  // ═════════ 도킹 레이아웃 컨트롤 (패널 배치 + 트랙패드 분할) ═════════
+  const DOCK_SPLIT_PRESETS = { small: 0.38, balance: 0.5, large: 0.62 };
+  function applyDockSplit() {
+    const f = clampNum(settings.dockSplit != null ? settings.dockSplit : 0.42, 0.3, 0.72);
+    const root = document.documentElement;
+    root.style.setProperty("--tp-fr", (f * 100).toFixed(2) + "fr");
+    root.style.setProperty("--panel-fr", ((1 - f) * 100).toFixed(2) + "fr");
+    // 가장 가까운 프리셋을 하이라이트 (임의 드래그 값이면 전부 꺼짐)
+    document.querySelectorAll("#dock-splits button").forEach((b) => {
+      const pv = DOCK_SPLIT_PRESETS[b.dataset.split];
+      b.classList.toggle("on", Math.abs(pv - f) < 0.02);
+    });
+  }
+  function setDockSplitPreset(name) {
+    const v = DOCK_SPLIT_PRESETS[name];
+    if (v == null) return;
+    settings.dockSplit = v; saveSettings(); applyDockSplit();
+  }
+  document.querySelectorAll("#dock-panels button").forEach((b) => b.addEventListener("click", () => { buzz(); selectTab(b.dataset.tab); }));
+  document.querySelectorAll("#dock-splits button").forEach((b) => b.addEventListener("click", () => { buzz(); setDockSplitPreset(b.dataset.split); }));
+
+  // 분할선 드래그: 가로=수평 위치로 트랙패드 폭, 세로=수직 위치로 트랙패드 높이 (트랙패드는 좌/하단)
+  (function setupSplitter() {
+    const sp = document.getElementById("dock-splitter");
+    if (!sp) return;
+    let dragging = false;
+    function onMove(clientX, clientY) {
+      const r = mainEl.getBoundingClientRect();
+      let f;
+      if (document.documentElement.classList.contains("orient-port")) f = 1 - (clientY - r.top) / Math.max(r.height, 1);
+      else f = (clientX - r.left) / Math.max(r.width, 1);
+      settings.dockSplit = clampNum(f, 0.3, 0.72);
+      applyDockSplit();
+    }
+    sp.addEventListener("pointerdown", (e) => {
+      if (!isDocked()) return;
+      dragging = true; sp.classList.add("drag");
+      try { sp.setPointerCapture(e.pointerId); } catch (x) {}
+      e.preventDefault();
+    });
+    sp.addEventListener("pointermove", (e) => { if (dragging) onMove(e.clientX, e.clientY); });
+    const end = () => { if (!dragging) return; dragging = false; sp.classList.remove("drag"); saveSettings(); };
+    sp.addEventListener("pointerup", end);
+    sp.addEventListener("pointercancel", end);
+  })();
+
+  // ═════════ 미러 전체화면 (크롬 숨김 · 캔버스 확대) ═════════
+  function mirrorFullOn() { return document.documentElement.classList.contains("mirror-full"); }
+  function enterMirrorFull() {
+    document.documentElement.classList.add("mirror-full");
+    const b = document.getElementById("mirror-full");
+    if (b) { b.textContent = "종료"; b.classList.add("on"); }
+    const stage = document.getElementById("mirror-stage");   // 진짜 Fullscreen API가 되면 함께 (iOS는 대부분 미지원 → CSS가 담당)
+    if (stage && stage.requestFullscreen) { try { stage.requestFullscreen().catch(() => {}); } catch (e) {} }
+  }
+  function exitMirrorFull() {
+    if (!mirrorFullOn()) return;
+    document.documentElement.classList.remove("mirror-full");
+    const b = document.getElementById("mirror-full");
+    if (b) { b.textContent = "전체화면"; b.classList.remove("on"); }
+    if (document.fullscreenElement) { try { document.exitFullscreen().catch(() => {}); } catch (e) {} }
+  }
+  (function wireMirrorFull() {
+    const full = document.getElementById("mirror-full");
+    const exit = document.getElementById("mirror-exit");
+    if (full) full.addEventListener("click", () => { buzz(); mirrorFullOn() ? exitMirrorFull() : enterMirrorFull(); });
+    if (exit) exit.addEventListener("click", () => { buzz(); exitMirrorFull(); });
+  })();
 
   // ═════════ 트랙패드 시트 (핸들 드래그 → 원하는 높이 디텐트에 스냅) ═════════
   // 0 = 풀화면, 0.45·0.7 = 부분(위에 덱/키보드 레이어가 함께 보임), 1 = 닫힘(핸들만).
@@ -484,7 +590,10 @@
     sheetDrag = null;
   });
   window.addEventListener("resize", sheetReflow);
-  if (window.visualViewport) window.visualViewport.addEventListener("resize", () => { setAppHeight(); sheetReflow(); });
+  if (vvp) {
+    vvp.addEventListener("resize", () => { setAppHeight(); sheetReflow(); });
+    vvp.addEventListener("scroll", () => { if (document.documentElement.classList.contains("kb-open")) window.scrollTo(0, 0); });
+  }
 
   // 좌/우 클릭 버튼 — 누르고 있으면 마우스 버튼이 '눌린 채' 유지.
   // → 좌클릭 누른 채 다른 손가락으로 트랙패드 드래그하면 진짜 드래그-선택.
@@ -786,7 +895,35 @@
     if (!mirror.canvas || mirror.ctx) return;
     mirror.ctx = mirror.canvas.getContext("2d");
     wireMirrorInput();
-    document.getElementById("mirror-fit").addEventListener("click", () => toast("화면 비율에 맞춰 표시 중"));
+    wireMirrorKeys();   // 물리 키보드 → 맥
+    const fit = document.getElementById("mirror-fit");
+    if (fit) fit.addEventListener("click", () => toast("화면 비율에 맞춰 표시 중"));
+  }
+  // (D) 미러: 물리 키보드 → 맥으로 (픽셀뷰라 t:text / t:key)
+  const EVENT_KEYCODE = {
+    Enter: 36, Tab: 48, Escape: 53, Backspace: 51, Delete: 117, " ": 49,
+    ArrowLeft: 123, ArrowRight: 124, ArrowUp: 126, ArrowDown: 125,
+    Home: 115, End: 119, PageUp: 116, PageDown: 121
+  };
+  function macKeyCodeForEvent(e) {
+    if (EVENT_KEYCODE[e.key] !== undefined) return EVENT_KEYCODE[e.key];
+    if ((e.metaKey || e.ctrlKey || e.altKey) && e.key.length === 1) return keyCodeForChar(e.key);
+    return null;
+  }
+  function wireMirrorKeys() {
+    const stage = document.getElementById("mirror-stage");
+    if (!stage || stage.__keysWired) return; stage.__keysWired = true;
+    stage.addEventListener("keydown", (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
+      const mods = [];
+      if (e.metaKey) mods.push("command");
+      if (e.ctrlKey) mods.push("control");
+      if (e.altKey) mods.push("option");
+      if (e.shiftKey) mods.push("shift");
+      const kc = macKeyCodeForEvent(e);
+      if (kc !== null && kc !== undefined) { e.preventDefault(); send({ t: "key", keyCode: kc, mods }); return; }
+      if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); send({ t: "text", text: e.key }); }
+    });
   }
   function onMirrorFrame(buf) {
     // 8바이트 헤더 스킵 → JPEG 바이트만. 항상 최신만 보관 → 밀린 프레임 자연 폐기
@@ -860,6 +997,7 @@
     const el = mirror.canvas;
     let mDown = null, mMoved = false, mLong = null, twoStart = null;
     el.addEventListener("touchstart", (e) => {
+      const stg = document.getElementById("mirror-stage"); if (stg) stg.focus();   // 물리 키보드 라우팅용 포커스
       if (e.touches.length === 2) {   // 두 손가락 = 스크롤 시작
         twoStart = { y: (e.touches[0].clientY + e.touches[1].clientY) / 2, n: normFromTouch(e.touches[0].clientX, e.touches[0].clientY) };
         mDown = null; clearTimeout(mLong); return;
@@ -940,26 +1078,75 @@
   }
   function stopTermPoll() { if (term.poll) clearInterval(term.poll); term.poll = null; term.active = false; }
   function termInput(textSeq) { if (textSeq) send({ t: "cterm", action: "input", text: textSeq }); }
+  function refreshTermSoon() { setTimeout(requestTermGrid, 120); }
+  // keydown → 터미널 입력 시퀀스 (물리 키보드·특수키 공용)
+  function termSeqForKey(e) {
+    const k = e.key;
+    if (e.ctrlKey && !e.metaKey && !e.altKey && k.length === 1) {   // Ctrl+문자 → 제어코드 0x01~0x1a
+      const c = k.toLowerCase().charCodeAt(0);
+      if (c >= 97 && c <= 122) return String.fromCharCode(c - 96);
+      if (k === "[") return "\x1b"; if (k === "\\") return "\x1c"; if (k === "]") return "\x1d";
+    }
+    switch (k) {
+      case "Enter": return "\r";
+      case "Backspace": return "\x7f";
+      case "Tab": return "\t";
+      case "Escape": return "\x1b";
+      case "ArrowUp": return "\x1b[A";
+      case "ArrowDown": return "\x1b[B";
+      case "ArrowRight": return "\x1b[C";
+      case "ArrowLeft": return "\x1b[D";
+      case "Home": return "\x1b[H";
+      case "End": return "\x1b[F";
+      case "Delete": return "\x1b[3~";
+      case "PageUp": return "\x1b[5~";
+      case "PageDown": return "\x1b[6~";
+    }
+    if (e.altKey && k.length === 1 && !e.metaKey && !e.ctrlKey) return "\x1b" + k;   // Alt+문자
+    if (k.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) return k;           // 일반 문자
+    return null;
+  }
+  function focusTermTarget() {
+    const screen = document.getElementById("term-screen");
+    if (HW.present && screen) screen.focus();
+  }
   function wireTerm() {
     if (term.wired) return; term.wired = true;
+    const scr = document.getElementById("term-screen");
     document.querySelectorAll("#panel-term .term-key").forEach((b) => {
-      b.addEventListener("click", (e) => { e.preventDefault(); buzz(); termInput(b.dataset.seq); setTimeout(requestTermGrid, 120); });
+      b.addEventListener("click", (e) => { e.preventDefault(); buzz(); termInput(b.dataset.seq); refreshTermSoon(); });
     });
     const inp = document.getElementById("term-input");
-    // 입력창에 타이핑 → 즉시 전송 후 비움 (IME 조합 종료 시 flush)
+    // (C) 물리 키보드: 화면 div 포커스 시 keydown 이 바로 터미널로
+    scr.addEventListener("keydown", (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
+      const seq = termSeqForKey(e);
+      if (seq == null) return;
+      e.preventDefault(); termInput(seq); refreshTermSoon();
+    });
+    // (B) 한글 자소분리 방지 — compositionend 완성형만
     let composing = false;
+    const flushBox = () => { if (inp.value) { termInput(inp.value); inp.value = ""; refreshTermSoon(); } };
     inp.addEventListener("compositionstart", () => { composing = true; });
-    inp.addEventListener("compositionend", () => { composing = false; if (inp.value) { termInput(inp.value); inp.value = ""; setTimeout(requestTermGrid, 120); } });
+    inp.addEventListener("compositionupdate", () => { composing = true; });
+    inp.addEventListener("compositionend", () => { composing = false; flushBox(); });
     inp.addEventListener("input", (e) => {
-      if (composing || e.isComposing) return;
-      if (inp.value) { termInput(inp.value); inp.value = ""; setTimeout(requestTermGrid, 120); }
+      if (composing || e.isComposing) return;                              // 1차: 조합 플래그
+      if (e.inputType && e.inputType.indexOf("Composition") >= 0) return;  // 2차: insertCompositionText 누수 차단
+      flushBox();                                                          // 영문/숫자/붙여넣기 = 즉시
     });
-    inp.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); termInput("\r"); setTimeout(requestTermGrid, 120); }
-      else if (e.key === "Backspace" && !inp.value) { e.preventDefault(); termInput(""); setTimeout(requestTermGrid, 120); }
+    inp.addEventListener("keydown", (e) => {   // 입력창의 특수·제어키는 시퀀스로
+      if (e.isComposing || e.keyCode === 229) return;
+      const special = e.ctrlKey || e.metaKey || e.altKey ||
+        ["Enter","Tab","Escape","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Home","End","Delete","PageUp","PageDown"].indexOf(e.key) >= 0 ||
+        (e.key === "Backspace" && !inp.value);
+      if (!special) return;
+      const seq = termSeqForKey(e);
+      if (seq == null) return;
+      e.preventDefault(); termInput(seq); refreshTermSoon();
     });
-    // 화면 탭 → 입력창 포커스(모바일 키보드 소환)
-    document.getElementById("term-screen").addEventListener("click", () => inp.focus());
+    // 화면 탭 → 물리 키보드면 화면 포커스(소프트키보드 안 뜸), 아니면 입력창(소프트키보드)
+    scr.addEventListener("click", () => { if (HW.present) scr.focus(); else inp.focus(); });
   }
 
   // ═════════ cmux 원격 (창 / 워크스페이스 / 탭 전환) ═════════
@@ -1133,20 +1320,31 @@
     });
     toolbarEl.appendChild(rename); toolbarEl.appendChild(del);
   }
+  // 앱 런치 위주 폴더 판별: 항목의 다수(60%+)가 launch 타입일 때만.
+  // (이름 힌트만으론 '앱/창' 같은 단축키 혼합 폴더까지 오인 → 단축키 힌트가 사라짐)
+  function folderIsApps(folder) {
+    if (!folder) return false;
+    const items = folder.items || [];
+    if (items.length < 2) return false;
+    const launch = items.filter((it) => it.type === "launch").length;
+    return launch >= Math.ceil(items.length * 0.6);
+  }
   function renderPages() {
     const keepScroll = pagesEl.scrollLeft;
     pagesEl.innerHTML = "";
     const folder = deck.folders[activeFolder];
     const items = folder ? folder.items : [];
+    const apps = folderIsApps(folder);
     const cells = items.map((item, i) => renderCell(item, i));
     if (editMode) cells.push(renderAddCell());
     const pages = [];
-    const per = pageSize();
+    // 앱 폴더는 셀을 키우고 한 페이지에 3행 정도만 노출(아이콘+이름 가독성)
+    const per = apps ? Math.max(1, deckCols * Math.min(deckRows, 3)) : pageSize();
     for (let i = 0; i < cells.length; i += per) pages.push(cells.slice(i, i + per));
     if (pages.length === 0) pages.push([]);
     pages.forEach((pc) => {
       const page = document.createElement("div");
-      page.className = "deck-page";
+      page.className = "deck-page" + (apps ? " apps" : "");
       pc.forEach((c) => page.appendChild(c));
       pagesEl.appendChild(page);
     });
@@ -1163,7 +1361,7 @@
       if (item.icon.indexOf("data:") === 0) { const im = document.createElement("img"); im.className = "ic-img"; im.src = item.icon; btn.appendChild(im); }
       else { const ic = document.createElement("span"); ic.className = "ic"; ic.textContent = item.icon; btn.appendChild(ic); }
     }
-    const main = document.createElement("span"); main.textContent = item.label || "(이름없음)"; btn.appendChild(main);
+    const main = document.createElement("span"); main.className = "nm"; main.textContent = item.label || "(이름없음)"; btn.appendChild(main);
     const sub = cellSub(item);
     if (sub) { const s = document.createElement("span"); s.className = "sub"; s.textContent = sub; btn.appendChild(s); }
     if (editMode) {
