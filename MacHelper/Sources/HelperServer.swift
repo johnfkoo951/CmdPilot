@@ -265,6 +265,14 @@ final class HelperServer: ObservableObject {
                 client?.sendText(json)
             }
             return
+        case "cterm":
+            // cmux 터미널 뷰 (포커스된 터미널 화면 텍스트 + 입력)
+            switch command.action {
+            case "grid":  CmuxBridge.terminalGrid { [weak client] json in client?.sendText(json) }
+            case "input": CmuxBridge.terminalInput(command.text ?? "")
+            default: break
+            }
+            return
         case "capture":
             // 맥 화면 → 폰 (JPEG base64)
             CaptureService.captureScreen { [weak client] json in
@@ -285,9 +293,13 @@ final class HelperServer: ObservableObject {
             // 맥 화면 실시간 미러링 (뷰어 등록/해제/적응 파라미터)
             guard #available(macOS 14.0, *), let client else { return }
             switch command.action {
-            case "start":  ScreenStreamer.shared.addViewer(client)
+            case "start":
+                if let d = command.display { ScreenStreamer.shared.selectDisplay(CGDirectDisplayID(d), requester: client) }
+                ScreenStreamer.shared.addViewer(client)
             case "stop":   ScreenStreamer.shared.removeViewer(client)
             case "config": ScreenStreamer.shared.configure(longEdge: command.w, fps: command.fps, quality: command.q)
+            case "displays": ScreenStreamer.shared.sendDisplays(to: client)
+            case "select": ScreenStreamer.shared.selectDisplay(command.display.map { CGDirectDisplayID($0) }, requester: client)
             default: break
             }
             return

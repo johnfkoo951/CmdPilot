@@ -30,6 +30,7 @@ struct InboundCommand: Decodable {
     let w: Int?           // mirror config: 긴 변 목표 px
     let fps: Int?         // mirror config: 목표 프레임레이트
     let q: Double?        // mirror config: JPEG 품질 0..1
+    let display: Int?     // mirror: 대상 디스플레이 ID (없으면 커서 있는 화면)
 }
 
 /// 매크로 한 단계. type 에 따라 사용하는 필드가 다르다.

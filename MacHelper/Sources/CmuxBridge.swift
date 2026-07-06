@@ -123,6 +123,29 @@ enum CmuxBridge {
         (try? JSONSerialization.data(withJSONObject: dict)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
     }
 
+    // MARK: - 터미널 뷰 (에이전트 원격의 확장 — 포커스된 cmux 터미널 화면을 텍스트로)
+
+    /// 현재 포커스된 cmux 터미널의 렌더 그리드(row_spans + styles + cursor)를 폰에 회신.
+    /// 화면 미러(픽셀)와 달리 터미널 UI 텍스트만 가져오므로 가볍고 선명하다.
+    static func terminalGrid(reply: @escaping (String) -> Void) {
+        queue.async {
+            if let data = run(["rpc", "mobile.terminal.replay", "{}"]),
+               let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+               let grid = obj["render_grid"] {
+                let payload: [String: Any] = ["t": "ctermGrid", "grid": grid]
+                if let d = try? JSONSerialization.data(withJSONObject: payload),
+                   let s = String(data: d, encoding: .utf8) { reply(s); return }
+            }
+            reply("{\"t\":\"ctermGrid\",\"error\":true}")
+        }
+    }
+
+    /// 포커스된 cmux 터미널에 텍스트/제어문자 입력 (mobile.terminal.input).
+    static func terminalInput(_ text: String) {
+        guard !text.isEmpty else { return }
+        queue.async { _ = run(["rpc", "mobile.terminal.input", jsonArg(["text": text])]) }
+    }
+
     /// 창 + 창별 워크스페이스 + 선택 워크스페이스의 탭(터미널)을 한 페이로드로 만든다.
     private static func stateJSON() -> String {
         // list-windows 하나로 건강 상태를 판정한다(내부에서 self-heal). 실패하면 다른 명령들도

@@ -133,10 +133,27 @@
         <span style="flex:1"></span>
         <button id="mirror-fit" class="mirror-btn">맞춤</button>
       </div>
+      <div id="mirror-monitors" class="mirror-monitors"></div>
       <div id="mirror-stage">
         <canvas id="mirror-canvas"></canvas>
         <div id="mirror-hint">화면 탭=클릭 · 길게=우클릭 · 드래그=이동 · 두 손가락=스크롤</div>
       </div>
+    </section>
+
+    <!-- 터미널 (포커스된 cmux 터미널 화면 — 텍스트 UI만) -->
+    <section id="panel-term" class="panel">
+      <div class="term-bar">
+        <span id="term-status">cmux 터미널</span>
+        <span style="flex:1"></span>
+        <button class="term-key" data-seq="&#x1b;">esc</button>
+        <button class="term-key" data-seq="&#x09;">tab</button>
+        <button class="term-key" data-seq="&#x03;">⌃C</button>
+        <button class="term-key" data-seq="&#x1b;[A">↑</button>
+        <button class="term-key" data-seq="&#x1b;[B">↓</button>
+        <button class="term-key" data-seq="&#x0d;">⏎</button>
+      </div>
+      <div id="term-screen" class="term-screen" tabindex="0"></div>
+      <input id="term-input" class="term-input" placeholder="여기에 입력…" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
     </section>
 
     <!-- 트랙패드 시트 (핸들 드래그로 높이 조절: 풀 · 부분 · 닫힘) -->
@@ -175,6 +192,7 @@
     <button class="tab" data-tab="keyboard"><svg class="icn"><use href="#i-keyboard"/></svg>키보드</button>
     <button class="tab" data-tab="agent"><svg class="icn"><use href="#i-terminal"/></svg>에이전트</button>
     <button class="tab" data-tab="mirror"><svg class="icn"><use href="#i-mirror"/></svg>미러</button>
+    <button class="tab" data-tab="term"><svg class="icn"><use href="#i-terminal"/></svg>터미널</button>
     <button class="tab active" data-tab="deck"><svg class="icn"><use href="#i-grid"/></svg>덱</button>
   </nav>
 

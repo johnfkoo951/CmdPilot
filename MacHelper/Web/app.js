@@ -37,6 +37,10 @@
           mirror.dispW = m.dispW; mirror.dispH = m.dispH;
           const ms = document.getElementById("mirror-status");
           if (ms) ms.textContent = "연결됨 · " + m.dispW + "×" + m.dispH;
+        } else if (m.t === "mirrorDisplays") {
+          renderMonitorTabs(m.displays || []);
+        } else if (m.t === "ctermGrid") {
+          if (!m.error && m.grid) renderTermGrid(m.grid);
         } else if (m.t === "mirror" && m.error) {
           const ms = document.getElementById("mirror-status");
           if (ms) ms.textContent = "권한 필요";
@@ -417,6 +421,7 @@
       if (name === "deck") renderDeck();
       if (name === "agent") startCmuxPoll(); else stopCmuxPoll();   // 에이전트 탭 표시 중엔 4초 자동 갱신
       if (name === "mirror") { mirrorInit(); startMirror(); } else stopMirror();   // 미러 탭 표시 중에만 스트림
+      if (name === "term") { wireTerm(); startTermPoll(); } else stopTermPoll();    // 터미널 탭 표시 중에만 폴링
     });
   });
 
@@ -775,7 +780,7 @@
   });
 
   // ═════════ 화면 미러 (맥 화면 실시간 + 탭→클릭) ═════════
-  const mirror = { canvas: null, ctx: null, dispW: 0, dispH: 0, pending: null, decoding: false, active: false };
+  const mirror = { canvas: null, ctx: null, dispW: 0, dispH: 0, pending: null, decoding: false, active: false, display: null };
   function mirrorInit() {
     mirror.canvas = document.getElementById("mirror-canvas");
     if (!mirror.canvas || mirror.ctx) return;
@@ -815,10 +820,29 @@
     mirror.active = true;
     const tier = pickMirrorTier();
     send({ t: "mirror", action: "config", w: tier.w, fps: tier.fps, q: tier.q });
-    send({ t: "mirror", action: "start" });
+    send({ t: "mirror", action: "start", display: mirror.display });
+    send({ t: "mirror", action: "displays" });   // 모니터 목록 요청
     const ms = document.getElementById("mirror-status"); if (ms) ms.textContent = "연결 중…";
   }
   function stopMirror() { if (!mirror.active) return; mirror.active = false; send({ t: "mirror", action: "stop" }); }
+  function renderMonitorTabs(displays) {
+    const bar = document.getElementById("mirror-monitors");
+    if (!bar) return;
+    bar.innerHTML = "";
+    if (displays.length <= 1) return;   // 모니터 1개면 탭 숨김
+    displays.forEach((d) => {
+      const b = document.createElement("button");
+      b.className = "mon-tab" + (d.current ? " on" : "");
+      b.textContent = d.name.replace(/\s*\(.*\)$/, "");   // 이름만(해상도 생략)
+      b.addEventListener("click", () => {
+        buzz();
+        mirror.display = d.id;
+        send({ t: "mirror", action: "select", display: d.id });
+        bar.querySelectorAll(".mon-tab").forEach((x) => x.classList.toggle("on", x === b));
+      });
+      bar.appendChild(b);
+    });
+  }
 
   // 미러 화면 탭 → 절대 클릭. object-fit: contain 레터박스 제외하고 정규화(0..1).
   function normFromTouch(clientX, clientY) {
@@ -870,6 +894,72 @@
       else send({ t: "mtap", nx: mDown.nx, ny: mDown.ny, button: "left", count: 1 });
       mDown = null;
     });
+  }
+
+  // ═════════ cmux 터미널 뷰 (포커스된 터미널 화면 텍스트 + 입력) ═════════
+  const term = { active: false, poll: null, lastSig: "" };
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function renderTermGrid(g) {
+    const screen = document.getElementById("term-screen");
+    if (!screen) return;
+    const styles = {};
+    (g.styles || []).forEach((s) => { styles[s.id] = s; });
+    const rows = g.rows || 24, cols = g.columns || 80;
+    const byRow = {};
+    (g.row_spans || []).forEach((sp) => { (byRow[sp.row] = byRow[sp.row] || []).push(sp); });
+    let html = "";
+    for (let r = 0; r < rows; r++) {
+      const spans = (byRow[r] || []).sort((a, b) => a.column - b.column);
+      let line = "", col = 0;
+      for (const sp of spans) {
+        if (sp.column > col) line += " ".repeat(sp.column - col);
+        const st = styles[sp.style_id] || {};
+        let css = "";
+        if (st.foreground) css += "color:" + st.foreground + ";";
+        if (st.background && st.id !== 0) css += "background:" + st.background + ";";
+        if (st.bold) css += "font-weight:700;";
+        if (st.italic) css += "font-style:italic;";
+        if (st.faint) css += "opacity:.6;";
+        if (st.inverse) css += "filter:invert(1);";
+        line += css ? '<span style="' + css + '">' + esc(sp.text) + "</span>" : esc(sp.text);
+        col = sp.column + (sp.cell_width || sp.text.length);
+      }
+      html += "<div class='tline'>" + (line || "&nbsp;") + "</div>";
+    }
+    // 배경색을 style 0 기준으로
+    const bg = (styles[0] && styles[0].background) || "#1a1c23";
+    screen.style.background = bg;
+    screen.innerHTML = html;
+    screen.scrollTop = screen.scrollHeight;   // 항상 최신 줄로
+  }
+  function requestTermGrid() { send({ t: "cterm", action: "grid" }); }
+  function startTermPoll() {
+    stopTermPoll(); term.active = true;
+    requestTermGrid();
+    term.poll = setInterval(() => { if (document.visibilityState === "visible") requestTermGrid(); }, 700);
+  }
+  function stopTermPoll() { if (term.poll) clearInterval(term.poll); term.poll = null; term.active = false; }
+  function termInput(textSeq) { if (textSeq) send({ t: "cterm", action: "input", text: textSeq }); }
+  function wireTerm() {
+    if (term.wired) return; term.wired = true;
+    document.querySelectorAll("#panel-term .term-key").forEach((b) => {
+      b.addEventListener("click", (e) => { e.preventDefault(); buzz(); termInput(b.dataset.seq); setTimeout(requestTermGrid, 120); });
+    });
+    const inp = document.getElementById("term-input");
+    // 입력창에 타이핑 → 즉시 전송 후 비움 (IME 조합 종료 시 flush)
+    let composing = false;
+    inp.addEventListener("compositionstart", () => { composing = true; });
+    inp.addEventListener("compositionend", () => { composing = false; if (inp.value) { termInput(inp.value); inp.value = ""; setTimeout(requestTermGrid, 120); } });
+    inp.addEventListener("input", (e) => {
+      if (composing || e.isComposing) return;
+      if (inp.value) { termInput(inp.value); inp.value = ""; setTimeout(requestTermGrid, 120); }
+    });
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); termInput("\r"); setTimeout(requestTermGrid, 120); }
+      else if (e.key === "Backspace" && !inp.value) { e.preventDefault(); termInput(""); setTimeout(requestTermGrid, 120); }
+    });
+    // 화면 탭 → 입력창 포커스(모바일 키보드 소환)
+    document.getElementById("term-screen").addEventListener("click", () => inp.focus());
   }
 
   // ═════════ cmux 원격 (창 / 워크스페이스 / 탭 전환) ═════════

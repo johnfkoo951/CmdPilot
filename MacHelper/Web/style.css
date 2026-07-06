@@ -303,6 +303,21 @@ html.tablet-sm .deck-btn { min-height: 84px; }
 #mirror-stage { flex: 1; min-height: 0; position: relative; margin-top: 8px; background: #000; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; }
 #mirror-canvas { max-width: 100%; max-height: 100%; object-fit: contain; touch-action: none; display: block; }
 #mirror-hint { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font-size: 11px; color: rgba(255,255,255,.5); pointer-events: none; }
+.mirror-monitors { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.mirror-monitors:empty { display: none; }
+.mon-tab { flex: 0 0 auto; padding: 6px 12px; background: var(--surface-2); color: var(--text-dim); border: none; border-radius: 8px; font-size: 12px; white-space: nowrap; }
+.mon-tab.on { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+
+/* 터미널 뷰 (cmux 포커스 터미널) */
+#panel-term { padding-top: 10px; }
+.term-bar { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-dim); }
+.term-key { background: var(--surface-2); color: var(--text); border: none; border-radius: 8px; padding: 6px 10px; font-size: 13px; flex: 0 0 auto; }
+.term-key:active { background: var(--accent); color: var(--accent-text); }
+.term-screen { flex: 1; min-height: 0; margin-top: 8px; padding: 8px 10px; background: #1a1c23; border-radius: 10px; border: 1px solid var(--border);
+  overflow: auto; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; line-height: 1.28; white-space: pre; -webkit-user-select: text; user-select: text; }
+.term-screen .tline { min-height: 1.28em; }
+.term-input { margin-top: 8px; width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 16px; -webkit-user-select: text; user-select: text; }
+.term-input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
 
 /* 토스트 */
 #toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 78px); transform: translateX(-50%);

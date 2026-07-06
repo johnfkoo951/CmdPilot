@@ -24,6 +24,7 @@ final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate {
 
     private var stream: SCStream?
     private var displayID: CGDirectDisplayID = CGMainDisplayID()
+    private var selectedDisplayID: CGDirectDisplayID?   // nil = 커서 있는 화면 자동
     private var seq: UInt16 = 0
 
     private final class Viewer {
@@ -63,6 +64,44 @@ final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate {
         }
     }
 
+    /// 대상 디스플레이 선택 (멀티모니터). 스트리밍 중이면 해당 화면으로 재시작.
+    func selectDisplay(_ id: CGDirectDisplayID?, requester: HTTPWebSocketConnection) {
+        queue.async {
+            self.selectedDisplayID = id
+            if self.stream != nil {
+                self.stopStream()
+                self.startStream(requester)
+            }
+        }
+    }
+
+    /// 연결된 디스플레이 목록을 폰에 회신 (탭 UI 용).
+    func sendDisplays(to conn: HTTPWebSocketConnection) {
+        Task {
+            let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+            let displays = content?.displays ?? []
+            let cur = Self.currentDisplayID()
+            var items: [String] = []
+            for (i, d) in displays.enumerated() {
+                let name = Self.displayName(d.displayID) ?? "디스플레이 \(i + 1)"
+                let isMain = d.displayID == CGMainDisplayID()
+                let isCur = d.displayID == (self.selectedDisplayID ?? cur)
+                items.append("{\"id\":\(d.displayID),\"name\":\"\(name) (\(d.width)×\(d.height))\",\"main\":\(isMain),\"current\":\(isCur)}")
+            }
+            conn.sendText("{\"t\":\"mirrorDisplays\",\"displays\":[\(items.joined(separator: ","))]}")
+        }
+    }
+
+    private static func displayName(_ id: CGDirectDisplayID) -> String? {
+        for screen in NSScreen.screens {
+            if let num = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
+               CGDirectDisplayID(num.uint32Value) == id {
+                return screen.localizedName
+            }
+        }
+        return nil
+    }
+
     // MARK: - 스트림 수명
 
     private func startStream(_ requester: HTTPWebSocketConnection) {
@@ -70,7 +109,7 @@ final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate {
             guard let self else { return }
             do {
                 let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
-                let did = Self.currentDisplayID()
+                let did = self.selectedDisplayID ?? Self.currentDisplayID()
                 guard let display = content.displays.first(where: { $0.displayID == did })
                         ?? content.displays.first else { return }
 
