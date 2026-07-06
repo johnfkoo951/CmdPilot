@@ -13,15 +13,18 @@
     // https(테일스케일 serve 등)로 열렸으면 wss 로 — 아니면 ws
     const proto = location.protocol === "https:" ? "wss" : "ws";
     ws = new WebSocket(`${proto}://${location.host}/ws`);
+    ws.binaryType = "arraybuffer";
     ws.onopen = () => {
       setStatus(true);
       send({ t: "hello", name: "Safari" });
       send({ t: "getDeck" });
       startPing();
+      if (mirror.active) startMirror();   // 재연결 시 미러 자동 재개
     };
     ws.onclose = () => { stopPing(); setStatus(false); scheduleReconnect(); };
     ws.onerror = () => { try { ws.close(); } catch (e) {} };
     ws.onmessage = (ev) => {
+      if (ev.data instanceof ArrayBuffer) { onMirrorFrame(ev.data); return; }   // 미러 영상 프레임
       try {
         const m = JSON.parse(ev.data);
         if (m.t === "deck") {
@@ -30,6 +33,14 @@
         } else if (m.t === "apps") {
           installedApps = m.list || [];
           if (appsPickerRefresh) appsPickerRefresh();
+        } else if (m.t === "mirrorInfo") {
+          mirror.dispW = m.dispW; mirror.dispH = m.dispH;
+          const ms = document.getElementById("mirror-status");
+          if (ms) ms.textContent = "연결됨 · " + m.dispW + "×" + m.dispH;
+        } else if (m.t === "mirror" && m.error) {
+          const ms = document.getElementById("mirror-status");
+          if (ms) ms.textContent = "권한 필요";
+          toast(m.error);
         } else if (m.t === "window") {
           if (m.ok === false) {
             if (m.reason === "single") toast("이 앱은 창이 하나뿐이에요");
@@ -405,6 +416,7 @@
       if (name === "keyboard") setTimeout(() => kb.focus(), 50); else kb.blur();
       if (name === "deck") renderDeck();
       if (name === "agent") startCmuxPoll(); else stopCmuxPoll();   // 에이전트 탭 표시 중엔 4초 자동 갱신
+      if (name === "mirror") { mirrorInit(); startMirror(); } else stopMirror();   // 미러 탭 표시 중에만 스트림
     });
   });
 
@@ -761,6 +773,104 @@
       send({ t: "key", keyCode: parseInt(btn.dataset.key, 10), mods: activeMods.slice() });
     });
   });
+
+  // ═════════ 화면 미러 (맥 화면 실시간 + 탭→클릭) ═════════
+  const mirror = { canvas: null, ctx: null, dispW: 0, dispH: 0, pending: null, decoding: false, active: false };
+  function mirrorInit() {
+    mirror.canvas = document.getElementById("mirror-canvas");
+    if (!mirror.canvas || mirror.ctx) return;
+    mirror.ctx = mirror.canvas.getContext("2d");
+    wireMirrorInput();
+    document.getElementById("mirror-fit").addEventListener("click", () => toast("화면 비율에 맞춰 표시 중"));
+  }
+  function onMirrorFrame(buf) {
+    // 8바이트 헤더 스킵 → JPEG 바이트만. 항상 최신만 보관 → 밀린 프레임 자연 폐기
+    mirror.pending = new Blob([new Uint8Array(buf, 8)], { type: "image/jpeg" });
+    if (!mirror.decoding) drainMirror();
+  }
+  async function drainMirror() {
+    mirror.decoding = true;
+    while (mirror.pending) {
+      const blob = mirror.pending; mirror.pending = null;
+      try {
+        const bmp = await createImageBitmap(blob);      // 오프-메인 디코드
+        if (mirror.canvas.width !== bmp.width) { mirror.canvas.width = bmp.width; mirror.canvas.height = bmp.height; }
+        mirror.ctx.drawImage(bmp, 0, 0);
+        bmp.close();
+      } catch (e) {}
+    }
+    mirror.decoding = false;
+  }
+  const MIRROR_TIERS = [
+    { maxRtt: 12, w: 1400, fps: 15, q: 0.62 },
+    { maxRtt: 30, w: 1100, fps: 12, q: 0.55 },
+    { maxRtt: 60, w: 900, fps: 10, q: 0.50 },
+    { maxRtt: Infinity, w: 720, fps: 8, q: 0.45 },
+  ];
+  function pickMirrorTier() {
+    const rtt = latencyMs || 20;
+    return MIRROR_TIERS.find((t) => rtt <= t.maxRtt) || MIRROR_TIERS[MIRROR_TIERS.length - 1];
+  }
+  function startMirror() {
+    mirror.active = true;
+    const tier = pickMirrorTier();
+    send({ t: "mirror", action: "config", w: tier.w, fps: tier.fps, q: tier.q });
+    send({ t: "mirror", action: "start" });
+    const ms = document.getElementById("mirror-status"); if (ms) ms.textContent = "연결 중…";
+  }
+  function stopMirror() { if (!mirror.active) return; mirror.active = false; send({ t: "mirror", action: "stop" }); }
+
+  // 미러 화면 탭 → 절대 클릭. object-fit: contain 레터박스 제외하고 정규화(0..1).
+  function normFromTouch(clientX, clientY) {
+    const el = mirror.canvas, r = el.getBoundingClientRect();
+    if (!el.width || !r.width) return null;
+    const srcAR = el.width / el.height, boxAR = r.width / r.height;
+    let cw = r.width, ch = r.height, ox = 0, oy = 0;
+    if (srcAR > boxAR) { ch = r.width / srcAR; oy = (r.height - ch) / 2; }
+    else { cw = r.height * srcAR; ox = (r.width - cw) / 2; }
+    const x = clientX - r.left - ox, y = clientY - r.top - oy;
+    if (x < 0 || y < 0 || x > cw || y > ch) return null;   // 레터박스 여백 무시
+    return { nx: x / cw, ny: y / ch };
+  }
+  function wireMirrorInput() {
+    const el = mirror.canvas;
+    let mDown = null, mMoved = false, mLong = null, twoStart = null;
+    el.addEventListener("touchstart", (e) => {
+      if (e.touches.length === 2) {   // 두 손가락 = 스크롤 시작
+        twoStart = { y: (e.touches[0].clientY + e.touches[1].clientY) / 2, n: normFromTouch(e.touches[0].clientX, e.touches[0].clientY) };
+        mDown = null; clearTimeout(mLong); return;
+      }
+      const t = e.touches[0], n = normFromTouch(t.clientX, t.clientY);
+      if (!n) return;
+      mDown = n; mMoved = false;
+      mLong = setTimeout(() => {   // 길게 = 우클릭
+        send({ t: "mtap", nx: mDown.nx, ny: mDown.ny, button: "right", count: 1 });
+        mDown = null; buzz();
+      }, 500);
+    }, { passive: true });
+    el.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+      if (twoStart && e.touches.length === 2) {
+        const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const dy = cy - twoStart.y; twoStart.y = cy;
+        if (twoStart.n) send({ t: "mscroll", nx: twoStart.n.nx, ny: twoStart.n.ny, dx: 0, dy: dy });
+        return;
+      }
+      if (!mDown) return;
+      const t = e.touches[0], n = normFromTouch(t.clientX, t.clientY);
+      if (!n) return;
+      clearTimeout(mLong);
+      if (!mMoved) { send({ t: "mdown", nx: mDown.nx, ny: mDown.ny, button: "left" }); mMoved = true; }
+      send({ t: "mmove", nx: n.nx, ny: n.ny });
+    }, { passive: false });
+    el.addEventListener("touchend", () => {
+      clearTimeout(mLong); twoStart = null;
+      if (!mDown) return;
+      if (mMoved) send({ t: "mup" });
+      else send({ t: "mtap", nx: mDown.nx, ny: mDown.ny, button: "left", count: 1 });
+      mDown = null;
+    });
+  }
 
   // ═════════ cmux 원격 (창 / 워크스페이스 / 탭 전환) ═════════
   // 동기화 모델: 요청 시 스냅샷 + 에이전트 탭이 보이는 동안 4초 폴링(변경 없으면 리렌더 생략).
