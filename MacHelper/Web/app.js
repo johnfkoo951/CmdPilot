@@ -712,7 +712,10 @@
   async function airStart() {
     const needsPerm = typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function";
     if (!window.isSecureContext && needsPerm) {
-      alert("iOS는 http 접속에서 모션 센서를 차단합니다.\n\nhttps://pilot.cmdspace.work 로 접속하면 에어마우스가 동작해요.\n(홈 화면 아이콘도 https 주소로 다시 추가 권장)");
+      alert("에어마우스(모션 센서)는 HTTPS 접속에서만 동작합니다. 지금은 http로 열려 있어요.\n\n" +
+            "맥 메뉴바(📡) → '에어마우스·모션 (HTTPS)'에 표시된 https:// 주소로 폰에서 접속하세요.\n" +
+            "(Tailscale을 켠 폰에서 https://<맥이름>.<tailnet>.ts.net)\n\n" +
+            "그 주소를 홈 화면 아이콘으로 다시 추가하면 편합니다.");
       return;
     }
     if (typeof DeviceMotionEvent === "undefined" && typeof DeviceOrientationEvent === "undefined") {

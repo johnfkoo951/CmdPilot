@@ -10,6 +10,7 @@ final class HelperServer: ObservableObject {
     @Published var isRunning = false
     @Published var httpURL = ""
     @Published var ipFallback = ""
+    @Published var httpsURL = ""   // 에어마우스(모션)용 tailnet HTTPS (tailscale serve). 없으면 빈 문자열.
     @Published var activeClients = 0
     @Published var accessibilityGranted = false
 
@@ -347,6 +348,11 @@ final class HelperServer: ObservableObject {
         } else {
             ipFallback = ""
         }
+        // tailnet HTTPS (에어마우스/모션 = secure context 필수). CLI 서브프로세스라 백그라운드에서.
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let https = NetworkInfo.tailscaleHTTPSURL() ?? ""
+            DispatchQueue.main.async { self?.httpsURL = https }
+        }
     }
 
     func stop() {
@@ -396,12 +402,21 @@ final class HelperServer: ObservableObject {
         copyText(httpURL)
     }
 
+    func copyHTTPSURL() {
+        copyText(httpsURL)
+    }
+
     func copyStatusCommand() {
         copyText("./script/macpilotctl.sh status")
     }
 
     func openWebUI() {
         guard let url = URL(string: httpURL) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    func openURLString(_ s: String) {
+        guard let url = URL(string: s) else { return }
         NSWorkspace.shared.open(url)
     }
 

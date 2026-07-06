@@ -126,6 +126,28 @@ struct MenuContentView: View {
                     .textSelection(.enabled)
             }
 
+            // 에어마우스/모션 = iOS가 HTTPS(secure context)에서만 허용 → tailnet HTTPS 주소 안내
+            if !server.httpsURL.isEmpty {
+                Divider().padding(.vertical, 2)
+                HStack(spacing: 6) {
+                    Image(systemName: "gyroscope").foregroundStyle(.tint)
+                    Text("에어마우스·모션 (HTTPS)").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button { server.copyHTTPSURL() } label: {
+                        Image(systemName: "doc.on.doc")
+                    }.buttonStyle(.borderless).help("HTTPS 주소 복사")
+                    Button { server.openURLString(server.httpsURL) } label: {
+                        Image(systemName: "safari")
+                    }.buttonStyle(.borderless).help("브라우저에서 열기")
+                }
+                Text(server.httpsURL)
+                    .font(.system(.caption, design: .monospaced))
+                    .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                Text("Tailscale 켠 폰에서 이 주소로 접속해야 에어마우스가 동작합니다.")
+                    .font(.caption2).foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if server.isRunning, let qr = Self.makeQR(server.httpURL) {
                 HStack(spacing: 12) {
                     Image(nsImage: qr)
