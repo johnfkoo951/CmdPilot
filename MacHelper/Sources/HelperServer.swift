@@ -348,9 +348,16 @@ final class HelperServer: ObservableObject {
         } else {
             ipFallback = ""
         }
-        // tailnet HTTPS (에어마우스/모션 = secure context 필수). CLI 서브프로세스라 백그라운드에서.
+        // HTTPS 주소 (에어마우스/모션 = secure context 필수). 서브프로세스라 백그라운드에서.
+        // 우선순위: 앱이 :443에서 서빙하는 인증서 CN(예: pilot.cmdspace.work) → tailscale serve.
+        let has443 = (listener443 != nil)
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            let https = NetworkInfo.tailscaleHTTPSURL() ?? ""
+            var https = ""
+            if has443, let cn = NetworkInfo.tlsCertCommonName() {
+                https = "https://\(cn)"
+            } else if let ts = NetworkInfo.tailscaleHTTPSURL() {
+                https = ts
+            }
             DispatchQueue.main.async { self?.httpsURL = https }
         }
     }

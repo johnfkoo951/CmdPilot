@@ -58,6 +58,19 @@ enum NetworkInfo {
         return nil
     }
 
+    /// 앱이 :443에서 서빙하는 인증서(tls/pilot.cer)의 CN → https URL 광고용 (예: pilot.cmdspace.work).
+    static func tlsCertCommonName() -> String? {
+        let cer = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/MacPilot/tls/pilot.cer")
+        guard FileManager.default.fileExists(atPath: cer.path),
+              let out = runTool("/usr/bin/openssl", ["x509", "-in", cer.path, "-noout", "-subject"]),
+              let cnRange = out.range(of: "CN") else { return nil }
+        // "subject=CN=pilot.cmdspace.work" 또는 "subject= CN = pilot..." → 값만 추출
+        let tail = out[cnRange.upperBound...].drop { $0 == " " || $0 == "=" }
+        let cn = tail.prefix { $0 != "\n" && $0 != "," && $0 != "/" }.trimmingCharacters(in: .whitespaces)
+        return cn.isEmpty ? nil : cn
+    }
+
     private static func runTool(_ path: String, _ args: [String]) -> String? {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: path)

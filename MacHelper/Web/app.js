@@ -664,12 +664,23 @@
 
   function onAirMotion(e) {
     const rr = e.rotationRate;
-    if (!rr || (rr.alpha == null && rr.beta == null)) return;
+    if (!rr || (rr.beta == null && rr.gamma == null && rr.alpha == null)) return;
     airLastEvent = performance.now();
     if (!airActive) return;
     const k = airSensK();                                     // deg/s → px
-    const dx = Math.abs(rr.alpha || 0) < 2 ? 0 : -(rr.alpha || 0) * k;   // 데드존 2°/s (손떨림)
-    const dy = Math.abs(rr.beta || 0) < 2 ? 0 : -(rr.beta || 0) * k;
+    // 폰을 세워 들고 좌우로 '돌리면'(yaw) 좌우, 위아래로 '기울이면'(pitch) 상하.
+    // rotationRate는 기기 좌표계 → 세워 든 폰의 yaw=gamma(Y축), pitch=beta(X축).
+    // (alpha=Z축 롤이라 수평에 쓰면 90° 어긋남.) 화면 방향(세로/가로)도 보정.
+    const b = rr.beta || 0, g = rr.gamma || 0;
+    const ang = (screen.orientation && typeof screen.orientation.angle === "number")
+      ? screen.orientation.angle : (window.orientation || 0);
+    let h, v;   // h=수평 회전, v=수직 회전
+    if (ang === 90)                        { h = -b; v =  g; }   // 가로 (왼쪽 회전)
+    else if (ang === -90 || ang === 270)   { h =  b; v = -g; }   // 가로 (오른쪽 회전)
+    else if (ang === 180)                  { h = -g; v = -b; }   // 세로 뒤집힘
+    else                                   { h =  g; v =  b; }   // 세로 (기본)
+    const dx = Math.abs(h) < 2 ? 0 : -h * k;                     // 데드존 2°/s (손떨림)
+    const dy = Math.abs(v) < 2 ? 0 : -v * k;
     if (dx || dy) queueMove(dx, dy);
   }
 
