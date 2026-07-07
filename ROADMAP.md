@@ -8,6 +8,21 @@
 
 ---
 
+## 이번 세션 완료 로그 (2026-07-07)
+
+- **에어마우스 살림** 🟢 — iOS 모션 센서 HTTPS 요건 해결. `tailscale serve`로 확인 후, **앱 :443 + LE 인증서
+  (pilot.cmdspace.work) + DNS→Tailscale IP** 조합으로 확정. 권한 요청을 `pointerdown`→`click`으로 분리(iOS 팝업),
+  안내를 iOS 17+ 실제 모델로 정정. 커밋 `24de9aa`, `d825d0e`.
+- **pilot.cmdspace.work 무포트 HTTPS** 🟢 — tailnet 전용(안전) + 유효 인증서 + wss. 메뉴바에 주소 광고.
+- **에어마우스 방향 90° 교정** 🟢 — `rotationRate.alpha`(롤)→`gamma`(yaw) + 화면방향 보정.
+- **미러 핀치줌/팬 + 3·4핑거 제스처(트랙패드 공유)** 🟢 — 워크플로우 설계+적대검증. 커밋 `38958bc`.
+- **3·4핑거 오발화 수정** 🟢 — 손가락 추가마다 기준 재설정 + 정착창. 커밋 `1d134ea`.
+- **제스처 매핑 macOS 표준화 + 감도** — 4핑거 공간/미션/엑스포제, 3핑거 탐색/탭. 커밋 `b7e8ae4`.
+- **한글 IME(터미널·미러)** 🟢 — 진짜 input으로만 조합. **도킹 컴패니언 슬롯** 🟢. 커밋 `00865c6`.
+- **로드맵 문서** — `ROADMAP.md` + `docs/roadmap.html`(로컬 뷰). 코드 감사 23건 종합.
+
+---
+
 ## 요약: 지금 상태 한눈에
 
 | 영역 | 상태 | 한 줄 |
@@ -18,7 +33,8 @@
 | 미러(화면 보기)+핀치줌·팬 | 🟢 | MJPEG 경량, 오디오·코덱 없음 |
 | cmux 터미널 뷰 | 🟢 | 동작 |
 | 3·4핑거 제스처 인식 | 🟡 | 인식은 됨, 사용성 보통 |
-| **에어마우스(모션)** | 🔴 | **HTTPS 필요 → http 접속에선 원천 차단** |
+| **에어마우스(모션)** | 🟢 | **해결 — pilot.cmdspace.work(HTTPS)에서 동작 + 방향축(gamma) 교정** |
+| **pilot.cmdspace.work** | 🟢 | **앱 :443 + LE 인증서 · DNS→Tailscale IP(tailnet 전용) · 무포트 HTTPS** |
 | **데스크탑(공간) 전환** | 🔴 | **macOS 26이 합성 전환 차단** |
 | iPad 도킹 분할 | 🟡 | 코어는 OK, 스플리터 오프셋·터치타깃 버그 |
 | 화면기록 권한 안내 | 🟡 | 인앱 UI 없음(손쉬운사용만 폴링) |
@@ -28,7 +44,15 @@
 
 ## 1. 지금 안 되는 것 (우선 수정)
 
-### 1.1 🔴 에어마우스(모션 센서) — HTTPS 보안 컨텍스트 필요 · 난이도 M
+### 1.1 🟢 에어마우스(모션 센서) — 해결됨 (2026-07-07)
+> **완료**: `https://pilot.cmdspace.work`에서 동작 확인. 아래는 해결 경위(기록용).
+> - HTTPS: 앱 `:443` 리스너가 LE 인증서(CN=pilot.cmdspace.work)로 서빙. DNS는 Tailscale IP(tailnet 전용=안전).
+> - 권한: iOS 17+는 설정 메뉴 없이 '팝업'만 → 요청을 `pointerdown`→`click`(iOS가 인정하는 제스처)으로 분리.
+> - 방향: `onAirMotion`이 `alpha`(롤) 대신 `gamma`(yaw)를 수평에 쓰도록 교정(90° 어긋남 해소) + 화면방향 보정.
+
+<details><summary>원래 진단(참고)</summary>
+
+#### (구) 에어마우스(모션 센서) — HTTPS 보안 컨텍스트 필요 · 난이도 M
 - **증상**: 에어 버튼을 누르면 "http에선 모션 센서 차단" 안내가 뜨고 동작 안 함.
 - **근본 원인**: iOS는 `DeviceMotion/DeviceOrientation`을 **secure context(HTTPS/localhost)에서만** 허용.
   현재 서버는 `http://<name>.local:8766` / `http://…ts.net:8766`(Tailscale)만 광고 → `window.isSecureContext=false` →
@@ -47,6 +71,8 @@
 - **부수 작업**: 안내문을 "보안 컨텍스트(HTTPS)로 접속" 우선으로 재정렬(iOS 26/27은 사이트별 권한 거부가 아니라
   secure context 부재가 진짜 원인). 메뉴/QR에 "에어마우스용 https" 라벨.
 - **파일**: `HelperServer.swift`(updateURL/loadTLSOptions), `MenuContentView.swift`, `app.js`(airStart 가드/안내).
+
+</details>
 
 ### 1.2 🔴 데스크탑(공간) 좌/우 전환 — macOS 26에서 차단 · 난이도 L(우회 연구)
 - **증상**: 4핑거 좌/우(데스크탑 전환) 기본 배정이 실제로는 무동작.
