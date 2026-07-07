@@ -657,50 +657,43 @@
   // 조용한 실패 금지: 센서 이벤트가 1.2초 안에 안 오면 원인을 화면에 알려준다.
   const airBtn = document.getElementById("air-btn");
   let airActive = false, airListening = false, airLastEvent = 0, airCheckTimer = null;
-  let airPrevOrient = null;
+  let airNeutral = null;   // 틸트 조이스틱 중립 기준 자세
 
   function airSensK() { return clampNum(settings.airSensitivity || 1.2, 0.3, 3) * 0.3; }
   function airStatus(txt) { const s = airBtn && airBtn.querySelector("span"); if (s) s.textContent = txt; }
 
+  // 라이브니스만 — 실제 이동은 아래 틸트 조이스틱(onAirOrient)이 담당.
   function onAirMotion(e) {
-    const rr = e.rotationRate;
-    if (!rr || (rr.beta == null && rr.gamma == null && rr.alpha == null)) return;
-    airLastEvent = performance.now();
-    if (!airActive) return;
-    const k = airSensK();                                     // deg/s → px
-    // 폰을 세워 들고 좌우로 '돌리면'(yaw) 좌우, 위아래로 '기울이면'(pitch) 상하.
-    // rotationRate는 기기 좌표계 → 세워 든 폰의 yaw=gamma(Y축), pitch=beta(X축).
-    // (alpha=Z축 롤이라 수평에 쓰면 90° 어긋남.) 화면 방향(세로/가로)도 보정.
-    const b = rr.beta || 0, g = rr.gamma || 0;
-    const ang = (screen.orientation && typeof screen.orientation.angle === "number")
-      ? screen.orientation.angle : (window.orientation || 0);
-    let h, v;   // h=수평 회전, v=수직 회전
-    if (ang === 90)                        { h = -b; v =  g; }   // 가로 (왼쪽 회전)
-    else if (ang === -90 || ang === 270)   { h =  b; v = -g; }   // 가로 (오른쪽 회전)
-    else if (ang === 180)                  { h = -g; v = -b; }   // 세로 뒤집힘
-    else                                   { h =  g; v =  b; }   // 세로 (기본)
-    const dx = Math.abs(h) < 2 ? 0 : -h * k;                     // 데드존 2°/s (손떨림)
-    const dy = Math.abs(v) < 2 ? 0 : -v * k;
-    if (dx || dy) queueMove(dx, dy);
+    if (e && (e.rotationRate || e.accelerationIncludingGravity)) airLastEvent = performance.now();
   }
 
-  // 회전속도(motion)가 안 오는 환경 폴백: 방향(절대각)의 변화량으로 이동
+  // 화면 방향을 보정한 앞뒤(fb)·좌우(lr) 기울기(도). beta=앞뒤, gamma=좌우(중력 기준·드리프트 없음).
+  function airTiltAxes(e) {
+    const beta = e.beta || 0, gamma = e.gamma || 0;
+    const ang = (screen.orientation && typeof screen.orientation.angle === "number")
+      ? screen.orientation.angle : (window.orientation || 0);
+    if (ang === 90) return { fb: gamma, lr: -beta };
+    if (ang === -90 || ang === 270) return { fb: -gamma, lr: beta };
+    if (ang === 180) return { fb: -beta, lr: -gamma };
+    return { fb: beta, lr: gamma };                            // 세로(기본)
+  }
+
+  // 틸트 조이스틱: 폰을 기울인 '방향'으로 커서가 흐른다(기울기量 = 속도). 자세를 되돌리면 멈춤.
+  //   앞뒤로 기울이면 상하, 좌우로 기울이면 좌우. 시작 자세가 중립(0).
   function onAirOrient(e) {
-    if (performance.now() - airLastEvent < 500) return;       // 모션이 살아있으면 무시
-    if (e.alpha == null && e.beta == null) return;
-    if (!airActive) { airPrevOrient = null; return; }
-    const cur = { a: e.alpha || 0, b: e.beta || 0 };
-    if (airPrevOrient) {
-      let da = cur.a - airPrevOrient.a;
-      if (da > 180) da -= 360;
-      if (da < -180) da += 360;                               // 0/360 경계 보정
-      const db = cur.b - airPrevOrient.b;
-      const k = airSensK() * 12;                              // 각도 적분값이라 계수 큼
-      const dx = Math.abs(da) < 0.15 ? 0 : -da * k;
-      const dy = Math.abs(db) < 0.15 ? 0 : -db * k;
-      if (dx || dy) queueMove(dx, dy);
-    }
-    airPrevOrient = cur;
+    if (e.beta == null && e.gamma == null) return;
+    airLastEvent = performance.now();
+    if (!airActive) { airNeutral = null; return; }
+    const t = airTiltAxes(e);
+    if (!airNeutral) { airNeutral = t; return; }               // 에어 시작 자세 = 중립
+    const DEAD = 2.5, MAXT = 30;                                // 데드존 / 최대기울기(도)
+    const clampT = (x) => Math.max(-MAXT, Math.min(MAXT, x));
+    const dfb = clampT(t.fb - airNeutral.fb);
+    const dlr = clampT(t.lr - airNeutral.lr);
+    const k = airSensK() * 1.6;                                 // 기울기(도) → px/이벤트
+    const vy = Math.abs(dfb) < DEAD ? 0 : -dfb * k;            // 뒤로 기울이면 위, 앞으로 기울이면 아래
+    const vx = Math.abs(dlr) < DEAD ? 0 :  dlr * k;            // 오른쪽 기울이면 오른쪽
+    if (vx || vy) queueMove(vx, vy);
   }
 
   async function airRequestPermissions() {
@@ -731,7 +724,7 @@
       airListening = true;
     }
     airActive = true;
-    airPrevOrient = null;
+    airNeutral = null;
     resetMotionFilter();   // 에어마우스 시작 — 1€ 리셋
     buzz();
     airBtn.classList.add("held");
@@ -754,7 +747,7 @@
   function airStop() {
     if (!airActive) return;
     airActive = false;
-    airPrevOrient = null;
+    airNeutral = null;
     airBtn.classList.remove("held");
     airStatus("에어");
     clearTimeout(airCheckTimer);
