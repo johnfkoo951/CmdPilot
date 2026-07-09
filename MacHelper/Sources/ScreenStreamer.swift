@@ -18,7 +18,7 @@ final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate {
     /// EventInjector 가 nx,ny 를 절대 좌표로 환산할 때 읽는다. nil 이면 미러 비활성.
     private(set) var displayBounds: CGRect?
 
-    private let queue = DispatchQueue(label: "com.joonlab.macpilot.mirror", qos: .userInteractive)
+    private let queue = DispatchQueue(label: "com.cmdspace.cmdpilot.mirror", qos: .userInteractive)
     private let ciContext = CIContext(options: [.cacheIntermediates: false])   // Metal 백엔드, 1회 생성 재사용
     private let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
 
@@ -57,9 +57,9 @@ final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate {
 
     func configure(longEdge: Int?, fps: Int?, quality: Double?) {
         queue.async {
-            if let l = longEdge { self.targetLongEdge = max(480, min(1800, l)) }
-            if let f = fps { self.fps = max(4, min(30, f)) }
-            if let q = quality { self.jpegQuality = max(0.3, min(0.85, q)) }
+            if let l = longEdge { self.targetLongEdge = max(480, min(4096, l)) }   // 원본급 미러 옵션 지원(웹 '최대' 화질)
+            if let f = fps { self.fps = max(4, min(60, f)) }
+            if let q = quality { self.jpegQuality = max(0.3, min(0.95, q)) }
             self.applyConfigLive()
         }
     }
@@ -129,7 +129,7 @@ final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate {
                     requester.sendText(info)
                 }
             } catch {
-                requester.sendText(#"{"t":"mirror","error":"화면 기록 권한이 필요합니다. 설정(Settings) → 개인정보 보호 및 보안(Privacy & Security) → 화면 및 시스템 오디오 기록(Screen Recording)에서 MacPilot Helper 를 켜세요."}"#)
+                requester.sendText(#"{"t":"mirror","error":"화면 기록 권한이 필요합니다. 설정(Settings) → 개인정보 보호 및 보안(Privacy & Security) → 화면 및 시스템 오디오 기록(Screen Recording)에서 CmdPilot Helper 를 켜세요."}"#)
             }
         }
     }

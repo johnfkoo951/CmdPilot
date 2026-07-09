@@ -10,7 +10,7 @@ import Foundation
 /// 안전하게 유지되고 이벤트 순서가 보장된다.
 enum EventInjector {
 
-    private static let queue = DispatchQueue(label: "com.joonlab.macpilot.eventinjector")
+    private static let queue = DispatchQueue(label: "com.cmdspace.cmdpilot.eventinjector")
 
     // 드래그 상태 (queue 위에서만 접근)
     private static var isMouseDown = false

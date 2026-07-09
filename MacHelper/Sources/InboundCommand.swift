@@ -31,6 +31,9 @@ struct InboundCommand: Decodable {
     let fps: Int?         // mirror config: 목표 프레임레이트
     let q: Double?        // mirror config: JPEG 품질 0..1
     let display: Int?     // mirror: 대상 디스플레이 ID (없으면 커서 있는 화면)
+    // 멀티플렉서 브리지 (t:"cmux"/"cterm") — 어느 백엔드로 라우팅할지 + 대상 pane 핸들
+    let backend: String?  // "cmux"(기본) | "herdr" | "tmux" … 없거나 빈 값이면 cmux
+    let handle: String?   // READ/SEND 대상 pane 핸들(불투명 문자열). 없으면 포커스된 pane
 }
 
 /// 매크로 한 단계. type 에 따라 사용하는 필드가 다르다.

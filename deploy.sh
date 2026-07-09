@@ -1,11 +1,11 @@
 #!/bin/bash
-# MacPilot 헬퍼를 Release 로 빌드해 ~/Applications 에 설치하고 LaunchAgent 를 (없으면 만들어서) 재시작.
+# CmdPilot 헬퍼를 Release 로 빌드해 ~/Applications 에 설치하고 LaunchAgent 를 (없으면 만들어서) 재시작.
 # 코드 수정 후 이 스크립트 한 번이면 상시 서버가 갱신된다. (Xcode 불필요)
 set -e
 cd "$(dirname "$0")"
 
-APP_NAME="MacPilot Helper"
-LABEL="com.joonlab.macpilot.helper"
+APP_NAME="CmdPilot Helper"
+LABEL="com.cmdspace.cmdpilot.helper"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 # 포트는 HelperServer.swift 의 상수에서 자동 감지 (이 머신은 8766 — 8765는 OmniControl 이 사용)
 PORT=$(sed -n 's/.*let port: UInt16 = \([0-9][0-9]*\).*/\1/p' MacHelper/Sources/HelperServer.swift)
@@ -13,7 +13,7 @@ PORT=${PORT:-8765}
 
 echo "▸ 프로젝트 생성 + Release 빌드(서명 없이)…"
 xcodegen generate >/dev/null
-xcodebuild -project MacPilot.xcodeproj -scheme MacPilotHelper -configuration Release \
+xcodebuild -project CmdPilot.xcodeproj -scheme CmdPilotHelper -configuration Release \
   -derivedDataPath ./.release CODE_SIGNING_ALLOWED=NO build >/dev/null
 
 APP_SRC="./.release/Build/Products/Release/$APP_NAME.app"
@@ -44,7 +44,7 @@ ditto "$APP_SRC" "$HOME/Applications/$APP_NAME.app"
 # LaunchAgent: plist 가 없으면 생성 (로그인 시 자동 시작 + 죽으면 자동 재시작)
 if [ ! -f "$PLIST" ]; then
   echo "▸ LaunchAgent 생성…"
-  mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs/MacPilot"
+  mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs/CmdPilot"
   cat > "$PLIST" <<PLISTEOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -65,9 +65,9 @@ if [ ! -f "$PLIST" ]; then
     <key>ProcessType</key>
     <string>Interactive</string>
     <key>StandardOutPath</key>
-    <string>$HOME/Library/Logs/MacPilot/helper.log</string>
+    <string>$HOME/Library/Logs/CmdPilot/helper.log</string>
     <key>StandardErrorPath</key>
-    <string>$HOME/Library/Logs/MacPilot/helper.log</string>
+    <string>$HOME/Library/Logs/CmdPilot/helper.log</string>
 </dict>
 </plist>
 PLISTEOF

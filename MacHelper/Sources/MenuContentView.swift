@@ -48,7 +48,7 @@ struct MenuContentView: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("CmdSpace Pilot")
+                Text("CmdPilot")
                     .font(.headline)
                 Text(server.launchModeDescription)
                     .font(.caption)
@@ -295,7 +295,7 @@ struct MenuContentView: View {
             Text("CMDSPACE")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(.secondary)
-            Text("CmdSpace Pilot v\(appVersion) · fork of MacPilot(JoonLab)")
+            Text("CmdPilot v\(appVersion) · fork of MacPilot(JoonLab)")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
             Spacer()

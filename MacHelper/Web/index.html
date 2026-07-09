@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="CmdSpace Pilot">
+  <meta name="apple-mobile-web-app-title" content="CmdPilot">
   <meta name="theme-color" content="#0f1115">
-  <title>CmdSpace Pilot</title>
+  <title>CmdPilot</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/logo.png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -34,6 +34,8 @@
     <symbol id="i-mirror" viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="12.5" rx="2.5"/><path d="M9 20.5h6M12 17v3.5"/></symbol>
     <!-- cmux 터미널 프롬프트 (❯_) -->
     <symbol id="i-cmux" viewBox="0 0 24 24"><path d="M4.5 6.5l5 5.5-5 5.5M12.5 18.5h7"/></symbol>
+    <!-- herdr 에이전트 상태 (활동 펄스) -->
+    <symbol id="i-herdr" viewBox="0 0 24 24"><path d="M2.5 12h3.2l2-6.5 3.4 13 2.6-9.5 1.7 5h5.6"/></symbol>
     <!-- 앱 내 창 전환 / 창 되돌리기 (macwindow.on.rectangle 계열) -->
     <symbol id="i-window-next" viewBox="0 0 24 24"><rect x="2.8" y="7.6" width="12.6" height="11.6" rx="2.4"/><path d="M2.8 10.9h12.6M5.4 9.25h.01M7.4 9.25h.01"/><path d="M8.2 7.6V6.2A2.4 2.4 0 0 1 10.6 3.8h7.2a2.4 2.4 0 0 1 2.4 2.4v7.2a2.4 2.4 0 0 1-2.4 2.4H16"/></symbol>
     <symbol id="i-window-back" viewBox="0 0 24 24"><rect x="2.6" y="4.6" width="18.8" height="14.8" rx="2.6"/><path d="M2.6 8.3h18.8M5.4 6.45h.01M7.4 6.45h.01"/><path d="M13.2 16l-2.5-2.5 2.5-2.5M10.7 13.5h4.3a2.2 2.2 0 0 1 0 4.4h-.6"/></symbol>
@@ -53,9 +55,10 @@
     <div class="dock-seg" id="dock-panels" aria-label="패널 배치">
       <button data-tab="deck">덱</button>
       <button data-tab="keyboard">키보드</button>
-      <button data-tab="agent">에이전트</button>
-      <button data-tab="mirror">미러</button>
+      <button data-tab="agent">cmux</button>
+      <button data-tab="herdr">herdr</button>
       <button data-tab="term">터미널</button>
+      <button data-tab="mirror">미러</button>
     </div>
     <span class="dock-bar-spacer"></span>
     <!-- 컴패니언 슬롯(왼쪽/위)에 무엇을 둘지: 트랙패드 · 키보드 · 없음(활성 패널 풀) -->
@@ -106,7 +109,7 @@
 
     <!-- 에이전트 (cmux · Claude Code 원격 조종) -->
     <section id="panel-agent" class="panel">
-      <div class="agent-sec cmux-head"><span>cmux 이동 — 창 · 워크스페이스 · 탭</span><button id="cmux-refresh" aria-label="새로고침">↻</button></div>
+      <div class="agent-sec cmux-head"><span id="mux-title">cmux — 창 · 워크스페이스 · 탭</span><button id="cmux-refresh" aria-label="새로고침">↻</button></div>
       <div id="cmux-remote" class="cmux-remote"><div class="cmux-empty">cmux 상태 불러오는 중…</div></div>
       <div class="agent-sec">제어</div>
       <div class="agent-grid g3">
@@ -130,12 +133,13 @@
         <button class="agent-btn ph" data-act="phrase" data-text="테스트 돌리고 결과 알려줘">테스트 실행</button>
         <button class="agent-btn ph" data-act="phrase" data-text="변경사항 커밋해줘">커밋해줘</button>
       </div>
-      <div class="agent-sec">앱</div>
-      <div class="agent-grid g2">
-        <button class="agent-btn" data-act="launch" data-target="/Applications/cmux.app">❯ cmux 열기</button>
-        <button class="agent-btn" data-act="launch" data-target="/Applications/Codex.app">◆ Codex 열기</button>
+      <div class="agent-sec">터미널 앱 열기</div>
+      <div class="agent-grid g3">
+        <button class="agent-btn" data-act="launch" data-target="/Applications/cmux.app">❯ cmux</button>
+        <button class="agent-btn" data-act="launch" data-target="/Applications/Ghostty.app">❯ Ghostty</button>
+        <button class="agent-btn" data-act="launch" data-target="/Applications/Orca.app">❯ Orca</button>
       </div>
-      <div class="agent-note">문구는 맥에서 포커스된 창에 타이핑됩니다 — cmux/터미널을 앞에 두고 쓰세요</div>
+      <div class="agent-note">문구는 맥에서 포커스된 창에 타이핑됩니다 — cmux/터미널을 앞에 두고 쓰세요 · herdr는 Ghostty 안에서 실행</div>
     </section>
 
     <!-- 덱 -->
@@ -179,7 +183,10 @@
     <!-- 터미널 (포커스된 cmux 터미널 화면 — 텍스트 UI만) -->
     <section id="panel-term" class="panel">
       <div class="term-bar">
-        <span id="term-status">cmux 터미널</span>
+        <div class="term-switch" id="term-switch">
+          <button data-tbk="cmux" class="on">cmux</button>
+          <button data-tbk="herdr">herdr</button>
+        </div>
         <span style="flex:1"></span>
         <button class="term-key" data-seq="&#x1b;">esc</button>
         <button class="term-key" data-seq="&#x09;">tab</button>
@@ -189,7 +196,22 @@
         <button class="term-key" data-seq="&#x0d;">⏎</button>
       </div>
       <div id="term-screen" class="term-screen"></div>
-      <input id="term-input" class="term-input" placeholder="여기에 입력…" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <input id="term-input" class="term-input" placeholder="입력 후 ⏎ 로 전송 (한글 OK)" enterkeyhint="send" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    </section>
+
+    <!-- herdr 전용 (원격 에이전트 상태 대시보드) -->
+    <section id="panel-herdr" class="panel">
+      <div class="agent-sec cmux-head"><span id="herdr-title">herdr — 에이전트 상태</span><button id="herdr-refresh" aria-label="새로고침">↻</button></div>
+      <div id="herdr-ws" class="cmux-chips"></div>
+      <div id="herdr-agents" class="herdr-agents"><div class="cmux-empty">herdr 미설치/미배포 — <code>./deploy.sh</code> 재빌드 + herdr 설치 후 활성화됩니다</div></div>
+      <div class="agent-sec">선택 에이전트 제어</div>
+      <div class="agent-grid g3">
+        <button class="agent-btn big" data-hact="enter">⏎<span>입력·승인</span></button>
+        <button class="agent-btn big" data-hact="esc">esc<span>중단</span></button>
+        <button class="agent-btn big" data-hact="ctrlc">⌃C<span>강제중단</span></button>
+      </div>
+      <button id="herdr-term" class="agent-btn ph" style="margin-top:10px">▶ 이 에이전트 터미널 보기</button>
+      <div class="agent-note">herdr는 에이전트마다 상태(🟠작업·🔴차단·🟢완료·⚪대기)를 네이티브로 보여줍니다. 차단·완료가 위로 정렬됩니다. (배포 + herdr 설치 후 활성)</div>
     </section>
 
     <!-- 트랙패드 시트 (핸들 드래그로 높이 조절: 풀 · 부분 · 닫힘) -->
@@ -223,15 +245,16 @@
     <button data-act="launch" data-target="obsidian://open?vault=CMDSPACE_Local_MBP" aria-label="메인 볼트"><svg class="icn solid"><use href="#i-obsidian"/></svg><span>볼트</span></button>
     <button data-act="launch" data-target="obsidian://open?vault=CMDS_LLM_Wiki" aria-label="위키 볼트"><svg class="icn solid"><use href="#i-obsidian"/></svg><span>위키</span></button>
     <button data-act="launch" data-target="/Applications/cmux.app" aria-label="cmux"><svg class="icn"><use href="#i-cmux"/></svg><span>cmux</span></button>
-    <button data-act="window" data-dir="next" aria-label="앱 내 다음 창"><svg class="icn"><use href="#i-window-next"/></svg><span>창 전환</span></button>
-    <button data-act="window" data-dir="prev" aria-label="앱 내 이전 창"><svg class="icn"><use href="#i-window-back"/></svg><span>창 ↩</span></button>
+    <button data-act="window" data-dir="next" aria-label="앱 내 다음 창"><svg class="icn"><use href="#i-window-next"/></svg><span>다음 창</span></button>
+    <button data-act="window" data-dir="prev" aria-label="앱 내 이전 창"><svg class="icn"><use href="#i-window-back"/></svg><span>이전 창</span></button>
   </div>
 
   <nav id="tabbar">
     <button class="tab" data-tab="keyboard"><svg class="icn"><use href="#i-keyboard"/></svg>키보드</button>
-    <button class="tab" data-tab="agent"><svg class="icn"><use href="#i-terminal"/></svg>에이전트</button>
-    <button class="tab" data-tab="mirror"><svg class="icn"><use href="#i-mirror"/></svg>미러</button>
+    <button class="tab" data-tab="agent"><svg class="icn"><use href="#i-cmux"/></svg>cmux</button>
+    <button class="tab" data-tab="herdr"><svg class="icn"><use href="#i-herdr"/></svg>herdr</button>
     <button class="tab" data-tab="term"><svg class="icn"><use href="#i-terminal"/></svg>터미널</button>
+    <button class="tab" data-tab="mirror"><svg class="icn"><use href="#i-mirror"/></svg>미러</button>
     <button class="tab active" data-tab="deck"><svg class="icn"><use href="#i-grid"/></svg>덱</button>
   </nav>
 

@@ -3,8 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:-run}"
-APP_NAME="MacPilot Helper"
-LABEL="com.joonlab.macpilot.helper"
+APP_NAME="CmdPilot Helper"
+LABEL="com.cmdspace.cmdpilot.helper"
 
 case "$MODE" in
   run)
@@ -28,7 +28,7 @@ case "$MODE" in
   --debug|debug)
     cd "$ROOT_DIR"
     xcodegen generate >/dev/null
-    xcodebuild -project MacPilot.xcodeproj -scheme MacPilotHelper -configuration Debug -derivedDataPath ./.debug CODE_SIGNING_ALLOWED=NO build
+    xcodebuild -project CmdPilot.xcodeproj -scheme CmdPilotHelper -configuration Debug -derivedDataPath ./.debug CODE_SIGNING_ALLOWED=NO build
     lldb -- "$ROOT_DIR/.debug/Build/Products/Debug/$APP_NAME.app/Contents/MacOS/$APP_NAME"
     ;;
   *)

@@ -94,7 +94,7 @@ final class Pairing {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
         <meta name="theme-color" content="#141416">
-        <title>MacPilot · 연결</title>
+        <title>CmdPilot · 연결</title>
         <style>
           :root { color-scheme: dark; }
           * { box-sizing: border-box; }
@@ -113,7 +113,7 @@ final class Pairing {
         </head>
         <body>
           <form class="card" action="/pair" method="get" autocomplete="off">
-            <h1>MacPilot 연결</h1>
+            <h1>CmdPilot 연결</h1>
             <p>Mac 메뉴바에 표시된 PIN을 입력하세요.</p>
             <input name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="6" autofocus
                    placeholder="••••••" aria-label="PIN">

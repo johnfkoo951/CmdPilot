@@ -23,7 +23,7 @@ final class HelperServer: ObservableObject {
     @Published var pairingPin = ""
 
     let port: UInt16 = 8766   // 8765 는 OmniControl bridge 가 사용 중이라 변경
-    let launchAgentLabel = "com.joonlab.macpilot.helper"
+    let launchAgentLabel = "com.cmdspace.cmdpilot.helper"
 
     private var listener: NWListener?
     private var listener80: NWListener?    // 짧은 주소용 :80 보조 리스너 (선택)
@@ -33,7 +33,7 @@ final class HelperServer: ObservableObject {
     private var accessibilityTimer: Timer?
 
     // 연결 장부는 전용 직렬 큐에서만 다룬다(메인 스레드 분리 → 다수 동시접속에도 응답 안 밀림)
-    private let serverQueue = DispatchQueue(label: "com.joonlab.macpilot.server")
+    private let serverQueue = DispatchQueue(label: "com.cmdspace.cmdpilot.server")
     private let maxConnections = 256   // 폭주(포트 스캐너 등) 시 FD 고갈 방지용 상한
     private let pairing = Pairing()    // 선택적 PIN 페어링(기본 off)
 
@@ -48,8 +48,8 @@ final class HelperServer: ObservableObject {
         }
         // 앱 목록(아이콘 렌더)을 시작 직후 1회 미리 빌드→캐시. 이후 getApps 는 메인 블록 없이 즉시 응답.
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { _ = AppList.json() }
-        // cmux 소켓 인증을 미리 맞춰둔다(재시작으로 지워졌으면 복구) → 첫 에이전트 탭 요청이 바로 됨
-        CmuxBridge.warmUp()
+        // 설치된 멀티플렉서 백엔드 프리워밍(cmux 소켓 인증 self-heal 등) → 첫 에이전트 탭 요청이 바로 됨
+        BridgeRouter.warmUpAll()
         // 페어링 상태를 UI 로 미러
         pairingEnabled = pairing.enabled
         pairingPin = pairing.pin
@@ -137,7 +137,7 @@ final class HelperServer: ObservableObject {
             }
         }
 
-        // HTTPS(:443) — `App Support/MacPilot/tls/pilot.p12` 인증서가 있으면 켠다.
+        // HTTPS(:443) — `App Support/CmdPilot/tls/pilot.p12` 인증서가 있으면 켠다.
         // (acme.sh 가 Let's Encrypt 인증서를 발급/갱신해 p12 로 떨궈줌 — 갱신 훅이 헬퍼 재시작)
         // iOS 모션 센서(에어마우스) 등 보안 컨텍스트 필수 기능이 이 주소에서 동작한다.
         if let tls = HelperServer.loadTLSOptions(), let port443 = NWEndpoint.Port(rawValue: 443) {
@@ -157,7 +157,7 @@ final class HelperServer: ObservableObject {
     private static func loadTLSOptions() -> NWProtocolTLS.Options? {
         let p12URL = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("MacPilot/tls/pilot.p12")
+            .appendingPathComponent("CmdPilot/tls/pilot.p12")
         guard let data = try? Data(contentsOf: p12URL) else { return nil }
 
         var items: CFArray?
@@ -261,16 +261,18 @@ final class HelperServer: ObservableObject {
             }
             return
         case "cmux":
-            // cmux 창/워크스페이스/탭 원격 전환 (CmuxBridge 가 화이트리스트 검증)
-            CmuxBridge.handle(command) { [weak client] json in
-                client?.sendText(json)
+            // 멀티플렉서 원격 전환 (backend=cmux 기본 / herdr …). 각 백엔드가 동사 화이트리스트 검증.
+            guard let backend = BridgeRouter.backend(command.backend) else {
+                client?.sendText(BridgeRouter.unavailableState(command.backend)); return
             }
+            backend.handle(command) { [weak client] json in client?.sendText(json) }
             return
         case "cterm":
-            // cmux 터미널 뷰 (포커스된 터미널 화면 텍스트 + 입력)
+            // 멀티플렉서 터미널 뷰 (포커스/지정 pane 화면 텍스트 + 입력)
+            guard let backend = BridgeRouter.backend(command.backend) else { return }
             switch command.action {
-            case "grid":  CmuxBridge.terminalGrid { [weak client] json in client?.sendText(json) }
-            case "input": CmuxBridge.terminalInput(command.text ?? "")
+            case "grid":  backend.terminalGrid(handle: command.handle) { [weak client] json in client?.sendText(json) }
+            case "input": backend.terminalInput(handle: command.handle, text: command.text ?? "")
             default: break
             }
             return
@@ -428,7 +430,7 @@ final class HelperServer: ObservableObject {
     }
 
     func openLogsFolder() {
-        let url = URL(fileURLWithPath: "\(NSHomeDirectory())/Library/Logs/MacPilot", isDirectory: true)
+        let url = URL(fileURLWithPath: "\(NSHomeDirectory())/Library/Logs/CmdPilot", isDirectory: true)
         NSWorkspace.shared.open(url)
     }
 

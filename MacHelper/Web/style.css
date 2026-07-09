@@ -48,8 +48,18 @@ html, body {
   overflow: hidden; overscroll-behavior: none; touch-action: manipulation;
   -webkit-text-size-adjust: 100%; position: fixed; width: 100%;
 }
-/* 높이: JS가 innerHeight 를 --app-height 로 공급 (사파리 주소창 접힘·웹앱 standalone 모두 정확) */
+/* 셸 높이 (근거·원칙: docs/VIEWPORT.md)
+   · Safari: height = --app-height(=visualViewport.height, JS 공급). 하단 URL 바 제외 → 탭바가 URL 바 위 flush.
+   · standalone: 아래 html.standalone 규칙이 물리 4변에 고정(값 신뢰 불가). */
 body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; height: var(--app-height, 100dvh); padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
+/* standalone(홈 화면 웹앱): URL 바가 없으니 높이 '값'(짧게 보고됨) 대신 물리 뷰포트 4변에 고정 →
+   body 아래 검은 띠 제거. 키보드 열릴 때만 --kb-height 만큼 바닥을 들어올린다.
+   (Safari엔 적용 금지 — 탭바가 URL 바 뒤로 숨음. 그래서 html.standalone 로 한정) */
+html.standalone body { top: 0; right: 0; left: 0; height: auto; bottom: calc(-1 * (env(safe-area-inset-bottom, 0px) + 12px)); }
+html.standalone.kb-open body { bottom: var(--kb-height, 0px); }
+/* 탭바 배경이 물리 바닥을 확실히 덮도록 12px 오버스캔 — 최하단 검은 라인 방지. */
+html.standalone #tabbar { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); }
+html.standalone.kb-open #tabbar { padding-bottom: 0; }
 
 /* SF Symbols 풍 인라인 아이콘 */
 .icn { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: block; }
@@ -157,6 +167,32 @@ main { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 .cmux-chip.tab { max-width: 100%; }
 .cmux-sub { font-size: 11px; color: var(--text-mute); }
 .cmux-empty { font-size: 12px; color: var(--text-mute); padding: 6px 0; }
+/* 멀티플렉서 백엔드 스위처 + 에이전트 상태 배지 */
+.mux-switch { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 2px; }
+.mux-switch:empty { display: none; }
+.mux-be { padding: 6px 13px; background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border); border-radius: 999px; font-size: 12px; font-weight: 600; }
+.mux-be.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.cmux-chip.has-state { display: inline-flex; align-items: center; gap: 6px; }
+.mux-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; background: var(--text-mute); }
+.mux-dot.st-working { background: #f5a623; }
+.mux-dot.st-blocked { background: #ff5c5c; animation: muxpulse 1s ease-in-out infinite; }
+.mux-dot.st-done    { background: #38d39f; }
+.mux-dot.st-idle    { background: var(--text-mute); }
+@keyframes muxpulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+/* herdr 전용 탭 — 에이전트 상태 대시보드 */
+#panel-herdr { overflow-y: auto; }
+.herdr-agents { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.herdr-card { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 13px 14px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; font-size: 15px; }
+.herdr-card.on { border-color: var(--accent); background: var(--surface-2); }
+.herdr-card:active { background: var(--accent); color: var(--accent-text); }
+.herdr-card .mux-dot { width: 11px; height: 11px; }
+.herdr-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.herdr-st { flex: 0 0 auto; font-size: 12px; font-weight: 700; }
+.herdr-st.st-working { color: #f5a623; }
+.herdr-st.st-blocked { color: #ff5c5c; }
+.herdr-st.st-done { color: #38d39f; }
+.herdr-st.st-idle { color: var(--text-mute); }
+.herdr-card:active .herdr-st, .herdr-card:active .herdr-name { color: inherit; }
 .agent-grid { display: grid; gap: 8px; }
 .agent-grid.g3 { grid-template-columns: repeat(3, 1fr); }
 .agent-grid.g5 { grid-template-columns: repeat(5, 1fr); }
@@ -170,14 +206,18 @@ main { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 .agent-note { font-size: 11px; color: var(--text-mute); text-align: center; margin-top: auto; padding: 12px 0 4px; line-height: 1.5; }
 
 /* 퀵바 (상시 노출 단축 버튼) — 2줄 */
-#quickbar { flex: 0 0 auto; display: flex; gap: 6px; padding: 6px 10px 3px; border-top: 1px solid var(--border); background: var(--bg); }
-#quickbar2 { flex: 0 0 auto; display: flex; gap: 6px; padding: 3px 10px 5px; background: var(--bg); }
-#quickbar button, #quickbar2 button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; background: var(--surface); color: var(--text-dim); border: 1px solid var(--border); border-radius: 12px; padding: 7px 0 5px; font-size: 10px; }
+/* 퀵바 2줄 — 두 줄 버튼 크기(가로·세로) 완전 통일: flex 1 1 0(동일 너비) + min-height(동일 높이) + 대칭 패딩 */
+#quickbar { flex: 0 0 auto; display: flex; gap: 6px; padding: 6px 10px 4px; border-top: 1px solid var(--border); background: var(--bg); }
+#quickbar2 { flex: 0 0 auto; display: flex; gap: 6px; padding: 4px 10px 6px; background: var(--bg); }
+#quickbar button, #quickbar2 button { flex: 1 1 0; min-width: 0; height: 56px; overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: var(--surface); color: var(--text-dim); border: 1px solid var(--border); border-radius: 12px; padding: 0 2px; font-size: 10px; }
 #quickbar button:active, #quickbar2 button:active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-#quickbar .icn, #quickbar2 .icn { width: 20px; height: 20px; }
+#quickbar .icn, #quickbar2 .icn { width: 20px; height: 20px; flex: 0 0 auto; }
+#quickbar button span, #quickbar2 button span { line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 
-/* 탭바 — safe-area 패딩을 22px로 클램프 (standalone에서 홈 인디케이터가 라벨을 가리던 문제) */
-#tabbar { flex: 0 0 auto; display: flex; border-top: 1px solid var(--border); padding-bottom: min(env(safe-area-inset-bottom, 0px), 22px); background: var(--bg); }
+/* 탭바 — 홈 인디케이터 safe-area를 '여기서만' 흡수(콘텐츠 아님). body가 모드별로 물리 바닥까지 닿으므로
+   full env(safe-area-inset-bottom)로 예약해야 라벨이 인디케이터에 안 가림. Safari는 env=0라 자동으로 얇아짐.
+   (근거·원칙: docs/VIEWPORT.md. 이전엔 짧은 body 증상 회피용 min(…,22px) 클램프였음) */
+#tabbar { flex: 0 0 auto; display: flex; border-top: 1px solid var(--border); background: var(--surface); padding-bottom: max(env(safe-area-inset-bottom, 0px), 4px); }
 #tabbar .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: none; color: var(--text-mute); font-size: 11px; padding: 6px 0 5px; }
 #tabbar .tab .icn { width: 21px; height: 21px; }
 #tabbar .tab.active { color: var(--accent); }
@@ -407,6 +447,10 @@ html.tablet-lg .deck-page.apps .deck-btn .ic-img { width: 46px; height: 46px; }
 /* 터미널 뷰 (cmux 포커스 터미널) */
 #panel-term { padding-top: 10px; }
 .term-bar { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-dim); }
+/* 터미널 백엔드 스위처 (cmux / herdr) */
+.term-switch { display: flex; gap: 3px; background: var(--surface-2); border-radius: 9px; padding: 3px; flex: 0 0 auto; }
+.term-switch button { background: none; border: none; color: var(--text-dim); border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; }
+.term-switch button.on { background: var(--accent); color: var(--accent-text); }
 .term-key { background: var(--surface-2); color: var(--text); border: none; border-radius: 8px; padding: 6px 10px; font-size: 13px; flex: 0 0 auto; }
 .term-key:active { background: var(--accent); color: var(--accent-text); }
 .term-screen { flex: 1; min-height: 0; margin-top: 8px; padding: 8px 10px; background: #1a1c23; border-radius: 10px; border: 1px solid var(--border);
@@ -427,9 +471,11 @@ html.tablet-lg .deck-page.apps .deck-btn .ic-img { width: 46px; height: 46px; }
 .copyright { font-size: 12px; color: var(--text-dim); }
 
 /* ═════════ 소프트키보드 대응 (A) — 입력창을 키보드 바로 위에 고정 ═════════ */
+/* 타이핑 중엔 퀵바 2줄만 숨겨 공간 확보하고, 탭바(#tabbar)는 유지한다.
+   (탭바까지 숨기면 키보드가 뜬 세로 모드에서 탭 이동 자체가 불가능 → 화면이 갇힌 것처럼 보였음) */
 html.kb-open #quickbar,
-html.kb-open #quickbar2,
-html.kb-open #tabbar { display: none; }
+html.kb-open #quickbar2 { display: none; }
+html.kb-open #tabbar { padding-bottom: 0; }              /* 키보드가 홈 인디케이터를 가리므로 예약 제거(죽은 여백 방지) */
 html.kb-open:not(.docked) #tp-sheet { display: none; }   /* 타이핑 중 트랙패드 시트 숨김(도킹 제외) */
 html.kb-open .panel { padding-bottom: 8px; }             /* 트랙패드 핸들 예약 여백(58px) 제거 */
 html.kb-open #panel-term .term-screen { margin-top: 6px; }

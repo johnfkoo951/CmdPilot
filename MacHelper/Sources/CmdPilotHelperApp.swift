@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct MacPilotHelperApp: App {
+struct CmdPilotHelperApp: App {
     @StateObject private var server = HelperServer()
 
     var body: some Scene {

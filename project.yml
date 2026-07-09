@@ -1,7 +1,7 @@
-name: MacPilot
+name: CmdPilot
 
 options:
-  bundleIdPrefix: com.joonlab.macpilot
+  bundleIdPrefix: com.cmdspace.cmdpilot
   deploymentTarget:
     macOS: "13.0"
   createIntermediateGroups: true
@@ -16,7 +16,7 @@ settings:
 
 targets:
   # ── macOS 헬퍼: 웹서버(HTTP+WebSocket) + CGEvent 입력 주입 ──
-  MacPilotHelper:
+  CmdPilotHelper:
     type: application
     platform: macOS
     sources:
@@ -27,21 +27,21 @@ targets:
         buildPhase: resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.joonlab.macpilot.helper
-        PRODUCT_NAME: "MacPilot Helper"
+        PRODUCT_BUNDLE_IDENTIFIER: com.cmdspace.cmdpilot.helper
+        PRODUCT_NAME: "CmdPilot Helper"
         GENERATE_INFOPLIST_FILE: "NO"
     info:
       path: MacHelper/Info.plist
       properties:
-        CFBundleDisplayName: "MacPilot Helper"
+        CFBundleDisplayName: "CmdPilot Helper"
         CFBundleIconFile: AppIcon
         LSUIElement: true
         NSLocalNetworkUsageDescription: "아이폰과 같은 Wi-Fi에서 브라우저 연결을 받기 위해 로컬 네트워크를 사용합니다."
 
 schemes:
-  MacPilotHelper:
+  CmdPilotHelper:
     build:
       targets:
-        MacPilotHelper: all
+        CmdPilotHelper: all
     run:
       config: Debug

@@ -7,7 +7,7 @@ import Foundation
 ///   - 대상 인자는 UUID 형식만 통과, 셸 미경유(Process 인자 배열 직접 전달)
 enum CmuxBridge {
     private static let cliPath = "/Applications/cmux.app/Contents/Resources/bin/cmux"
-    private static let queue = DispatchQueue(label: "com.joonlab.macpilot.cmux", qos: .userInitiated)
+    private static let queue = DispatchQueue(label: "com.cmdspace.cmdpilot.cmux", qos: .userInitiated)
 
     static var available: Bool { FileManager.default.isExecutableFile(atPath: cliPath) }
 
@@ -23,11 +23,11 @@ enum CmuxBridge {
     // 해법: 우리 소유의 고정 패스워드를 App Support 에 보관하고, cmux.json 이 그 값과 다르면 다시 써넣는다.
     //       cmux 가 파일을 핫리로드하므로 앱 재시작 없이 즉시 복구된다. (auth 실패 시 자동 발동)
 
-    /// 우리가 관리하는 고정 소켓 패스워드 (App Support/MacPilot/cmux-socket.pass). 없으면 생성.
+    /// 우리가 관리하는 고정 소켓 패스워드 (App Support/CmdPilot/cmux-socket.pass). 없으면 생성.
     private static func canonicalPassword() -> String {
         let dir = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("MacPilot", isDirectory: true)
+            .appendingPathComponent("CmdPilot", isDirectory: true)
         let url = dir.appendingPathComponent("cmux-socket.pass")
         if let existing = try? String(contentsOf: url, encoding: .utf8) {
             let trimmed = existing.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -5,7 +5,7 @@ import Network
 /// 번들 정적 자산을 시작 시 1회만 메모리에 적재 → 요청마다 디스크 I/O 없음.
 /// (현장에서 여러 기기가 동시에 페이지를 받아도 즉시 응답)
 ///
-/// 개발 오버라이드: `~/Library/Application Support/MacPilot/web/` 에 같은 이름의 파일이 있으면
+/// 개발 오버라이드: `~/Library/Application Support/CmdPilot/web/` 에 같은 이름의 파일이 있으면
 /// 번들 캐시 대신 그 파일을 서빙한다 → 웹(HTML/JS/CSS)만 고칠 땐 재빌드(=ad-hoc 재서명으로
 /// 손쉬운 사용 권한 리셋) 없이 반영. 동기화: `./script/macpilotctl.sh sync-web`
 private enum AssetCache {
@@ -13,7 +13,7 @@ private enum AssetCache {
 
     static let overrideDir = FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("MacPilot/web", isDirectory: true)
+        .appendingPathComponent("CmdPilot/web", isDirectory: true)
 
     static let table: [String: Item] = {
         func load(_ file: String, _ mime: String) -> Item? {

@@ -8,7 +8,7 @@ import Vision
 /// ① 맥 화면 → 폰: `screencapture` 로 찍어 JPEG base64 회신 (화면 기록 권한 필요 — 최초 1회 시스템이 요청)
 /// ② 폰 카메라 → 맥: 이미지에서 Vision OCR(한/영) → 맥 클립보드에 복사 (클립보드 히스토리 앱에 쌓임)
 enum CaptureService {
-    private static let queue = DispatchQueue(label: "com.joonlab.macpilot.capture", qos: .userInitiated)
+    private static let queue = DispatchQueue(label: "com.cmdspace.cmdpilot.capture", qos: .userInitiated)
 
     // MARK: - 맥 화면 → 폰
 
@@ -43,7 +43,7 @@ enum CaptureService {
                 }
                 reply("{\"t\":\"capture\",\"data\":\"\(jpeg.base64EncodedString())\"}")
             } catch {
-                reply(#"{"t":"capture","error":"화면 기록 권한이 필요합니다. 맥에 뜬 창에서 허용(Allow) 후, 설정(Settings) → 개인정보 보호 및 보안(Privacy & Security) → 화면 및 시스템 오디오 기록(Screen & System Audio Recording)에서 MacPilot Helper를 켜고 다시 시도하세요."}"#)
+                reply(#"{"t":"capture","error":"화면 기록 권한이 필요합니다. 맥에 뜬 창에서 허용(Allow) 후, 설정(Settings) → 개인정보 보호 및 보안(Privacy & Security) → 화면 및 시스템 오디오 기록(Screen & System Audio Recording)에서 CmdPilot Helper를 켜고 다시 시도하세요."}"#)
             }
         }
     }

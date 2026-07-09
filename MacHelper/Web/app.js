@@ -53,10 +53,10 @@
           }
         } else if (m.t === "cmux") {
           const snapshot = JSON.stringify(m);
-          if (snapshot !== lastCmuxJSON) {   // 변경 없으면 리렌더 생략 (폴링 깜빡임 방지)
-            lastCmuxJSON = snapshot;
-            cmuxState = m;
-            renderCmux();
+          if (m.backend === "herdr") {       // herdr 탭으로 라우팅
+            if (snapshot !== lastHerdrJSON) { lastHerdrJSON = snapshot; herdrState = m; renderHerdr(); }
+          } else if (snapshot !== lastCmuxJSON) {   // cmux(기본) — 변경 없으면 리렌더 생략
+            lastCmuxJSON = snapshot; cmuxState = m; renderCmux();
           }
         } else if (m.t === "capture") {
           const capBox = document.getElementById("cap-result");
@@ -218,11 +218,14 @@
     document.documentElement.classList.add("standalone");
   const vvp = window.visualViewport;
   function setAppHeight() {
-    const h = vvp ? vvp.height : window.innerHeight;
-    document.documentElement.style.setProperty("--app-height", Math.round(h) + "px");
+    // --app-height 는 **Safari 전용** 셸 높이 = visualViewport.height (하단 URL 바·키보드 제외).
+    // standalone 은 어떤 높이 '값'도 홈 인디케이터만큼 짧게 보고되므로 신뢰 불가 →
+    //   CSS 가 body 를 물리 4변(position:fixed; inset:0)에 고정하고, 키보드 때만 --kb-height 로 바닥을 든다.
+    //   (근거·원칙: docs/VIEWPORT.md)
+    document.documentElement.style.setProperty("--app-height", Math.round(vvp ? vvp.height : window.innerHeight) + "px");
     const kb = vvp ? Math.max(0, window.innerHeight - vvp.height - (vvp.offsetTop || 0)) : 0;
     document.documentElement.style.setProperty("--kb-height", Math.round(kb) + "px");
-    const open = kb > 100;   // 물리 키보드 후보바(~55px) 제외, 소프트키보드만
+    const open = kb > 100;   // 물리 키보드 후보바(~55px)·iOS26 visualViewport 잔차(~24px) 제외, 소프트키보드만
     document.documentElement.classList.toggle("kb-open", open);
     if (open && vvp && vvp.offsetTop) window.scrollTo(0, 0);   // iOS fixed body 밀림 원복
   }
@@ -452,9 +455,12 @@
     document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "panel-" + name));
     if (name === "keyboard") setTimeout(() => kb.focus(), 50); else kb.blur();
     if (name === "deck") renderDeck();
-    if (name === "agent") startCmuxPoll(); else stopCmuxPoll();   // 에이전트 탭 표시 중엔 4초 자동 갱신
+    if (name === "agent") startCmuxPoll(); else stopCmuxPoll();   // 에이전트 탭(cmux) 표시 중엔 4초 자동 갱신
+    if (name === "herdr") startHerdrPoll(); else stopHerdrPoll(); // herdr 탭 표시 중엔 4초 자동 갱신
     if (name === "mirror") { mirrorInit(); resetMirrorView(); startMirror(); if (HW.present) { const mi = document.getElementById("mirror-input"); if (mi) mi.focus(); } } else stopMirror();
-    if (name === "term") { wireTerm(); startTermPoll(); focusTermTarget(); } else stopTermPoll();
+    // 터미널 탭: 소프트키보드는 자동으로 안 띄운다(들어가자마자 키보드가 화면을 밀어올리던 문제).
+    // 입력하려면 화면/입력창을 탭하면 포커스됨. 물리 키보드가 붙어 있을 때만 자동 포커스.
+    if (name === "term") { wireTerm(); startTermPoll(); if (HW.present) focusTermTarget(); } else stopTermPoll();
     if (document.documentElement.classList.contains("docked")) applyDockCompanion();   // 활성 패널 변경 시 키보드 컴패니언 중복 회피
   }
   document.querySelectorAll("#tabbar .tab").forEach((tab) => {
@@ -621,7 +627,8 @@
   window.addEventListener("resize", sheetReflow);
   if (vvp) {
     vvp.addEventListener("resize", () => { setAppHeight(); sheetReflow(); });
-    vvp.addEventListener("scroll", () => { if (document.documentElement.classList.contains("kb-open")) window.scrollTo(0, 0); });
+    // 스크롤(주소창 접힘·offsetTop 단독 변화)에도 재계산 — iOS 뷰포트 안정화(window 'resize'는 iOS에서 미발화/부정확)
+    vvp.addEventListener("scroll", () => { setAppHeight(); if (document.documentElement.classList.contains("kb-open")) window.scrollTo(0, 0); });
   }
 
   // 좌/우 클릭 버튼 — 누르고 있으면 마우스 버튼이 '눌린 채' 유지.
@@ -1061,10 +1068,16 @@
     const rtt = latencyMs || 20;
     return MIRROR_TIERS.find((t) => rtt <= t.maxRtt) || MIRROR_TIERS[MIRROR_TIERS.length - 1];
   }
+  // 설정 '미러 화질' override — auto(RTT 자동 티어) / high(고화질) / max(원본급, Swift clamp 4096)
+  const MIRROR_QUALITY = {
+    high: { w: 2560, fps: 24, q: 0.75 },
+    max:  { w: 3840, fps: 30, q: 0.90 },
+  };
+  function mirrorConfig() { return MIRROR_QUALITY[settings.mirrorQuality] || pickMirrorTier(); }
   function startMirror() {
     mirror.active = true;
-    const tier = pickMirrorTier();
-    send({ t: "mirror", action: "config", w: tier.w, fps: tier.fps, q: tier.q });
+    const cfg = mirrorConfig();
+    send({ t: "mirror", action: "config", w: cfg.w, fps: cfg.fps, q: cfg.q });
     send({ t: "mirror", action: "start", display: mirror.display });
     send({ t: "mirror", action: "displays" });   // 모니터 목록 요청
     const ms = document.getElementById("mirror-status"); if (ms) ms.textContent = "연결 중…";
@@ -1273,14 +1286,14 @@
     screen.innerHTML = html;
     screen.scrollTop = screen.scrollHeight;   // 항상 최신 줄로
   }
-  function requestTermGrid() { send({ t: "cterm", action: "grid" }); }
+  function requestTermGrid() { send({ t: "cterm", backend: currentBackend, action: "grid" }); }
   function startTermPoll() {
     stopTermPoll(); term.active = true;
     requestTermGrid();
     term.poll = setInterval(() => { if (document.visibilityState === "visible") requestTermGrid(); }, 700);
   }
   function stopTermPoll() { if (term.poll) clearInterval(term.poll); term.poll = null; term.active = false; }
-  function termInput(textSeq) { if (textSeq) send({ t: "cterm", action: "input", text: textSeq }); }
+  function termInput(textSeq) { if (textSeq) send({ t: "cterm", backend: currentBackend, action: "input", text: textSeq }); }
   function refreshTermSoon() { setTimeout(requestTermGrid, 120); }
   // keydown → 터미널 입력 시퀀스 (물리 키보드·특수키 공용)
   function termSeqForKey(e) {
@@ -1317,41 +1330,50 @@
     if (term.wired) return; term.wired = true;
     const scr = document.getElementById("term-screen");
     const inp = document.getElementById("term-input");
+    // 라인 입력 모델: 입력창에 텍스트를 '보이게' 쌓아두고(IME 완성형 그대로) ⏎ 로 한 줄을 전송.
+    //  → (1) 글자가 보임 (2) 한 줄 1회 전송이라 문자별 딜레이 없음 (3) IME 조합이 입력창에서 끝나 자소분리 없음.
+    function sendLine() {
+      termInput(inp.value + "\r");   // 현재 줄 + 개행 (빈 줄이면 개행만)
+      inp.value = "";
+      refreshTermSoon();
+    }
+    // term-bar 버튼: ⏎ = 라인 전송, 나머지(esc·tab·⌃C·↑·↓) = raw 제어 즉시 전송.
     document.querySelectorAll("#panel-term .term-key").forEach((b) => {
       b.addEventListener("click", (e) => {
-        e.preventDefault(); buzz(); termInput(b.dataset.seq); refreshTermSoon();
-        inp.focus();   // 특수키 버튼이 포커스를 훔쳐도 물리 키보드 타깃을 input 으로 되돌림
+        e.preventDefault(); buzz();
+        if (b.dataset.seq === "\r") sendLine();
+        else { termInput(b.dataset.seq); refreshTermSoon(); }
+        inp.focus();
       });
     });
-    // (B) 한글 자소분리 방지 — 텍스트는 오직 이 input 의 IME 조합 → compositionend 완성형만
-    let composing = false;
-    const flushBox = () => { if (inp.value) { termInput(inp.value); inp.value = ""; refreshTermSoon(); } };
-    inp.addEventListener("compositionstart", () => { composing = true; });
-    inp.addEventListener("compositionupdate", () => { composing = true; });
-    inp.addEventListener("compositionend", () => { composing = false; flushBox(); });
-    inp.addEventListener("input", (e) => {
-      if (composing || e.isComposing) return;                              // 1차: 조합 플래그
-      if (e.inputType && e.inputType.indexOf("Composition") >= 0) return;  // 2차: insertCompositionText 누수 차단
-      flushBox();                                                          // 영문/숫자/붙여넣기 = 즉시
-    });
-    inp.addEventListener("keydown", (e) => {   // 입력창의 특수·제어키는 시퀀스로
-      if (e.isComposing || e.keyCode === 229) return;
-      const special = e.ctrlKey || e.metaKey || e.altKey ||
-        ["Enter","Tab","Escape","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Home","End","Delete","PageUp","PageDown"].indexOf(e.key) >= 0 ||
-        (e.key === "Backspace" && !inp.value);
-      if (!special) return;
+    // Enter(물리/소프트) = 라인 전송. Esc/Tab/Ctrl·Alt 조합 = raw 제어. 일반 문자·편집키는 입력창에 남긴다.
+    inp.addEventListener("keydown", (e) => {
+      if (e.isComposing || e.keyCode === 229) return;     // 한글 조합 중엔 개입 X
+      if (e.key === "Enter") { e.preventDefault(); sendLine(); return; }
+      const raw = (e.ctrlKey && !e.metaKey) || (e.altKey && !e.metaKey) || e.key === "Escape" || e.key === "Tab";
+      if (!raw) return;                                   // 일반 문자·Backspace·방향키 = 입력창 편집(통과)
       const seq = termSeqForKey(e);
       if (seq == null) return;
       e.preventDefault(); termInput(seq); refreshTermSoon();
     });
-    // 화면을 탭하면(물리든 소프트든) 항상 입력창으로 포커스 → div 로 새지 않음
     scr.addEventListener("click", () => inp.focus());
   }
 
   // ═════════ cmux 원격 (창 / 워크스페이스 / 탭 전환) ═════════
   // 동기화 모델: 요청 시 스냅샷 + 에이전트 탭이 보이는 동안 4초 폴링(변경 없으면 리렌더 생략).
   let cmuxState = null, cmuxPoll = null, lastCmuxJSON = "";
-  function requestCmux(verb, target) { send({ t: "cmux", dir: verb || "state", target: target || "" }); }
+  let currentBackend = "cmux";   // 멀티플렉서 백엔드 (cmux 로컬 / herdr 원격 …)
+  // cmux 탭은 cmux 전용(백엔드 스위처 없음). 터미널 탭만 currentBackend 로 cmux/herdr 을 고른다.
+  function requestCmux(verb, target) { send({ t: "cmux", backend: "cmux", dir: verb || "state", target: target || "" }); }
+  // 터미널 탭 백엔드 전환 (term-switch 칩 / herdr 탭의 '터미널 보기'가 호출).
+  function setBackend(id) {
+    if (!id) return;
+    currentBackend = id;
+    const scr = document.getElementById("term-screen");
+    if (scr) scr.innerHTML = "";             // 백엔드 전환 → 터미널 뷰 초기화
+    document.querySelectorAll("#term-switch button").forEach((b) => b.classList.toggle("on", b.dataset.tbk === id));
+    if (term.active) requestTermGrid();
+  }
   function startCmuxPoll() {
     stopCmuxPoll();
     requestCmux();
@@ -1369,9 +1391,16 @@
   function renderCmux() {
     const root = document.getElementById("cmux-remote");
     if (!root) return;
-    if (!cmuxState) { root.innerHTML = '<div class="cmux-empty">cmux 상태 불러오는 중…</div>'; return; }
-    if (cmuxState.available === false) { root.innerHTML = '<div class="cmux-empty">cmux가 설치되어 있지 않습니다</div>'; return; }
-    if (cmuxState.denied) { root.innerHTML = '<div class="cmux-empty">cmux 소켓 권한 대기 중 — cmux를 한 번 재시작하면 활성화됩니다 (↻로 재확인)</div>'; return; }
+    if (!cmuxState) { root.innerHTML = '<div class="cmux-empty">에이전트 상태 불러오는 중…</div>'; return; }
+    if (cmuxState.available === false) {
+      root.innerHTML = '<div class="cmux-empty">' + (cmuxState.backend || "백엔드") + '가 설치/설정되어 있지 않습니다</div>'; return;
+    }
+    if (cmuxState.denied) {
+      const msg = cmuxState.backend === "herdr"
+        ? 'herdr에 연결할 수 없습니다 — 원격에 herdr가 떠 있는지·SSH 연결을 확인하세요 (↻ 재시도)'
+        : 'cmux 소켓 권한 대기 중 — cmux를 한 번 재시작하면 활성화됩니다 (↻로 재확인)';
+      root.innerHTML = '<div class="cmux-empty">' + msg + '</div>'; return;
+    }
     root.innerHTML = "";
     (cmuxState.windows || []).forEach((win) => {
       const row = document.createElement("div");
@@ -1390,19 +1419,77 @@
     if (cmuxState.tabs && cmuxState.tabs.length) {
       const lbl = document.createElement("div");
       lbl.className = "cmux-sub";
-      lbl.textContent = "탭 (현재 워크스페이스)";
+      lbl.textContent = "탭 · 에이전트 (현재 워크스페이스)";
       root.appendChild(lbl);
       const wrap = document.createElement("div");
       wrap.className = "cmux-chips";
       cmuxState.tabs.forEach((tb) => {
         const chip = cmuxChip(tb.title || "터미널", !!tb.focused, "", () => requestCmux("focus-tab", tb.id));
         chip.classList.add("tab");
+        if (tb.state) {                       // ⑤ 에이전트 상태 배지 (herdr 등 네이티브 상태)
+          chip.classList.add("has-state");
+          const dot = document.createElement("span");
+          dot.className = "mux-dot st-" + tb.state;
+          chip.insertBefore(dot, chip.firstChild);
+        }
         wrap.appendChild(chip);
       });
       root.appendChild(wrap);
     }
   }
   document.getElementById("cmux-refresh").addEventListener("click", () => { buzz(); requestCmux(); });
+
+  // ═════════ herdr 전용 탭 (원격 에이전트 상태 대시보드) ═════════
+  // backend=herdr 로 같은 상태 프로토콜을 재사용하되, tabs[]를 '에이전트 상태 카드'로 렌더.
+  // herdr의 킬러 기능 = 네이티브 agent 상태(idle/working/blocked/done)를 한눈에.
+  let herdrState = null, herdrPoll = null, lastHerdrJSON = "";
+  const HERDR_ORDER = { blocked: 0, done: 1, working: 2, idle: 3, "": 4 };   // 나를 기다리는 게 위로
+  const HERDR_LABEL = { blocked: "차단", done: "완료", working: "작업 중", idle: "대기", "": "" };
+  function requestHerdr(verb, target) { send({ t: "cmux", backend: "herdr", dir: verb || "state", target: target || "" }); }
+  function startHerdrPoll() {
+    stopHerdrPoll(); requestHerdr();
+    herdrPoll = setInterval(() => { if (document.visibilityState === "visible") requestHerdr(); }, 4000);
+  }
+  function stopHerdrPoll() { if (herdrPoll) clearInterval(herdrPoll); herdrPoll = null; }
+  function renderHerdr() {
+    const wsRoot = document.getElementById("herdr-ws");
+    const root = document.getElementById("herdr-agents");
+    if (!root || !wsRoot) return;
+    if (!herdrState) { root.innerHTML = '<div class="cmux-empty">herdr 상태 불러오는 중…</div>'; wsRoot.innerHTML = ""; return; }
+    if (herdrState.available === false) {
+      root.innerHTML = '<div class="cmux-empty">herdr 미설치/미배포 — <code>./deploy.sh</code> 재빌드 + herdr 설치 후 활성화됩니다</div>'; wsRoot.innerHTML = ""; return;
+    }
+    if (herdrState.denied) {
+      root.innerHTML = '<div class="cmux-empty">herdr에 연결 못 함 — 원격 herdr가 라이브인지·SSH 연결을 확인하세요 (↻)</div>'; wsRoot.innerHTML = ""; return;
+    }
+    wsRoot.innerHTML = "";
+    (herdrState.windows || []).forEach((win) => (win.workspaces || []).forEach((ws) => {
+      wsRoot.appendChild(cmuxChip(ws.title || "(무제)", !!ws.selected, ws.color || "", () => requestHerdr("select-workspace", ws.id)));
+    }));
+    const agents = (herdrState.tabs || []).slice().sort((a, b) => (HERDR_ORDER[a.state || ""] - HERDR_ORDER[b.state || ""]));
+    root.innerHTML = "";
+    if (!agents.length) { root.innerHTML = '<div class="cmux-empty">현재 워크스페이스에 에이전트가 없습니다</div>'; return; }
+    agents.forEach((ag) => {
+      const card = document.createElement("button");
+      card.className = "herdr-card" + (ag.focused ? " on" : "");
+      const dot = document.createElement("span"); dot.className = "mux-dot st-" + (ag.state || "idle");
+      const name = document.createElement("span"); name.className = "herdr-name"; name.textContent = ag.title || "에이전트";
+      const st = document.createElement("span"); st.className = "herdr-st st-" + (ag.state || "idle"); st.textContent = HERDR_LABEL[ag.state || ""] || "";
+      card.appendChild(dot); card.appendChild(name); card.appendChild(st);
+      card.addEventListener("click", () => { buzz(); requestHerdr("focus-tab", ag.id); });
+      root.appendChild(card);
+    });
+  }
+  function herdrCtrl(act) {
+    const seq = act === "enter" ? "\r" : act === "esc" ? "\x1b" : "\x03";
+    send({ t: "cterm", backend: "herdr", action: "input", text: seq }); buzz();
+  }
+  document.querySelectorAll("#panel-herdr [data-hact]").forEach((b) => b.addEventListener("click", () => herdrCtrl(b.dataset.hact)));
+  document.getElementById("herdr-refresh").addEventListener("click", () => { buzz(); requestHerdr(); });
+  document.getElementById("herdr-term").addEventListener("click", () => { setBackend("herdr"); selectTab("term"); });
+
+  // 터미널 탭 백엔드 스위처 (cmux / herdr)
+  document.querySelectorAll("#term-switch button").forEach((b) => b.addEventListener("click", () => { buzz(); setBackend(b.dataset.tbk); }));
 
   // ═════════ 덱 ═════════
   const STORE_KEY = "macpilot.deck.v2";
@@ -1892,6 +1979,8 @@
       sliderHTML("hz", "전송 주사율", 24, 120, 1) +
       sliderHTML("smooth", "움직임 보정", 0, 0.45, 0.01) +
       sliderHTML("resolution", "해상도 배율", 0.5, 2, 0.05) +
+      '<div class="set-section">미러 화질 (미러 탭 열려 있을 때만 동작 · 최대는 대역폭·부하↑)</div>' +
+      '<div class="seg" id="set-mirror"><button data-mq="auto">자동</button><button data-mq="high">고화질</button><button data-mq="max">최대(원본급)</button></div>' +
       '<div class="set-section">트랙패드</div>' +
       sliderHTML("move", "커서 속도", 0.4, 3, 0.1) +
       sliderHTML("accel", "포인터 가속", 0, 0.15, 0.01) +
@@ -1951,6 +2040,17 @@
       });
     });
     refreshNetworkButtons();
+    // 미러 화질 세그
+    function refreshMirrorButtons() {
+      modalRoot.querySelectorAll("#set-mirror button").forEach((b) => b.classList.toggle("on", b.dataset.mq === (settings.mirrorQuality || "auto")));
+    }
+    modalRoot.querySelectorAll("#set-mirror button").forEach((b) => {
+      b.addEventListener("click", () => {
+        settings.mirrorQuality = b.dataset.mq; saveSettings(); refreshMirrorButtons();
+        if (mirror.active) startMirror();   // 미러 켜져 있으면 즉시 반영
+      });
+    });
+    refreshMirrorButtons();
     networkUIRefresh = () => { syncNetworkSliders(); refreshNetworkButtons(); };   // 자동 프리셋 조정 시 모달 갱신
 
     const dir = modalRoot.querySelector("#set-scrolldir");
