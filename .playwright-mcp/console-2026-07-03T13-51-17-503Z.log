@@ -1,7 +1,0 @@
-[      71ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ http://localhost:8766/:0
-[   18772ms] TypeError: Cannot read properties of undefined (reading '0')
-    at sheetHandle.addEventListener.passive (http://localhost:8766/app.js:350:31)
-    at eval (eval at <anonymous> (eval at evaluate (:303:30)), <anonymous>:1:47)
-    at eval (eval at evaluate (:303:30), <anonymous>:4:50)
-    at UtilityScript.evaluate (<anonymous>:305:16)
-    at UtilityScript.<anonymous> (<anonymous>:1:44)

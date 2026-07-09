@@ -36,3 +36,9 @@ publish/
 .vs/
 WindowsHelper/**/bin/
 WindowsHelper/**/obj/
+
+# 배포 아티팩트 (script/package_app.sh 산출)
+dist/
+
+# Playwright MCP 아티팩트 (스크린샷 캡처 시 생성)
+.playwright-mcp/

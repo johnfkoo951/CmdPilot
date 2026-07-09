@@ -20,7 +20,7 @@
   <img src="docs/img/pilot-trackpad.png" width="195" alt="트랙패드">
   <img src="docs/img/pilot-deck.png" width="195" alt="덱 (발표 리모컨)">
   <img src="docs/img/pilot-keyboard.png" width="195" alt="키보드">
-  <img src="docs/img/pilot-settings.png" width="195" alt="네트워크 설정">
+  <img src="docs/img/pilot-settings.png" width="195" alt="설정 (테마·제스처·네트워크)">
 </p>
 
 ## 무엇인가
