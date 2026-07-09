@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="MacHelper/Web/logo.png" width="120" alt="CmdSpace Pilot">
+  <img src="MacHelper/Web/logo.png" width="120" alt="CmdPilot">
 </p>
 
-<h1 align="center">CmdSpace Pilot</h1>
+<h1 align="center">CmdPilot</h1>
 
 <p align="center">
   <b>폰을 맥의 트랙패드 · 키보드 · 스트림덱 · AI 에이전트 리모컨으로.</b><br>
@@ -58,12 +58,12 @@
 ## 설치
 
 ```bash
-git clone https://github.com/johnfkoo951/MacPilot.git && cd MacPilot
+git clone https://github.com/johnfkoo951/CmdPilot.git && cd MacPilot
 brew install xcodegen
 ./deploy.sh        # Release 빌드 → ~/Applications 설치 → LaunchAgent(상시 서버) 자동 구성
 ```
 
-1. 메뉴바 📡(권한 없으면 ⚠️) 클릭 → **권한 열기** → 손쉬운 사용에서 *MacPilot Helper* 켜기 (1회)
+1. 메뉴바 📡(권한 없으면 ⚠️) 클릭 → **권한 열기** → 손쉬운 사용에서 *CmdPilot Helper* 켜기 (1회)
 2. 폰에서 메뉴바에 표시된 주소 열기 (QR 스캔 가능) → **공유 → 홈 화면에 추가**
 
 > Apple ID를 Xcode에 로그인해두면 고정 서명이 되어 재빌드해도 권한이 유지됩니다.
@@ -120,7 +120,7 @@ Windows용 헬퍼(커뮤니티 포트)는 [docs/WINDOWS.md](docs/WINDOWS.md) 참
 ## Credits
 
 원작 **[MacPilot](https://github.com/joonlab/MacPilot)** — **Park Joon (박준) · [JoonLab](https://github.com/joonlab)**, built end-to-end with Claude Code.
-CmdSpace Pilot 포크 — **구요한 · [CMDSPACE](https://cmdspace.work)**. 포크/재배포 시 원작자와 원본 레포 링크를 유지해 주세요.
+CmdPilot 포크 — **구요한 · [CMDSPACE](https://cmdspace.work)**. 포크/재배포 시 원작자와 원본 레포 링크를 유지해 주세요.
 
 ## License
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**CmdSpace Pilot** — 구요한(johnfkoo951)'s branded fork of MacPilot (upstream: joonlab/MacPilot,
+**CmdPilot** — 구요한(johnfkoo951)'s branded fork of MacPilot (upstream: joonlab/MacPilot,
 MIT, keep the credit). It turns a Mac into a wireless trackpad / keyboard / Stream-Deck controlled
 from any phone's browser. A menu-bar Swift helper runs a hand-rolled HTTP + WebSocket server on the LAN (port 8765);
 the phone opens a URL, gets a vanilla HTML/JS web client, and its gestures/taps are streamed back as
@@ -16,16 +16,16 @@ The project is XcodeGen-defined (no checked-in `.xcodeproj`) and codebase commen
 ## Build, run, deploy
 
 ```bash
-xcodegen generate            # regenerate MacPilot.xcodeproj from project.yml — run after ANY file add/remove
-open MacPilot.xcodeproj       # then build/run target MacPilotHelper in Xcode (📡 menu-bar icon appears)
+xcodegen generate            # regenerate CmdPilot.xcodeproj from project.yml — run after ANY file add/remove
+open CmdPilot.xcodeproj       # then build/run target CmdPilotHelper in Xcode (📡 menu-bar icon appears)
 
-./deploy.sh                  # Release build → ~/Applications/MacPilot Helper.app → restart launchd agent
+./deploy.sh                  # Release build → ~/Applications/CmdPilot Helper.app → restart launchd agent
 ./script/macpilotctl.sh      # status|start|stop|restart|logs|open|url|install|sync-web|unsync-web
 ./script/macpilotctl.sh sync-web   # web-only edits: rsync Web/ → App Support override, NO rebuild
 ```
 
 - **Web-only changes never need a rebuild**: the server serves files from
-  `~/Library/Application Support/MacPilot/web/` first (if present), then the bundle. `sync-web`
+  `~/Library/Application Support/CmdPilot/web/` first (if present), then the bundle. `sync-web`
   populates it; `unsync-web` reverts to bundle. This matters because a rebuild = new ad-hoc
   signature = Accessibility grant reset.
 
@@ -73,13 +73,13 @@ Two halves talk over one WebSocket carrying flat JSON commands.
   `MacroStep`. This is the source of truth for the JS↔Swift protocol; keep `app.js`'s emitted JSON and
   this struct in lockstep.
 - **`DeckStore.swift`** — persists the deck JSON verbatim to
-  `~/Library/Application Support/MacPilot/deck.json`. The Mac is the single store, so all phones/tablets
+  `~/Library/Application Support/CmdPilot/deck.json`. The Mac is the single store, so all phones/tablets
   share one deck.
 - **`AppList.swift`** — scans installed apps (path + name + icon) for the deck's launch-action picker;
   icons rendered on the main thread, cached after first build.
 - **`MediaKeys.swift` / `SpaceSwitcher.swift`** — system HID media keys (volume/brightness) and
   three-finger-swipe → Mission Control / space switching.
-- **`MenuContentView.swift` / `MacPilotHelperApp.swift` / `NetworkInfo.swift`** — SwiftUI menu-bar UI
+- **`MenuContentView.swift` / `CmdPilotHelperApp.swift` / `NetworkInfo.swift`** — SwiftUI menu-bar UI
   (URL, QR, permission prompt, diagnostics), app entry, and `.local`/IPv4 resolution.
 
 ### Phone side — `MacHelper/Web/` (vanilla, bundled as app resources)
@@ -94,10 +94,10 @@ gestures and deck interactions, opens the WebSocket, and emits the flat JSON com
 - The port is the `port` constant in `HelperServer.swift`. **On this machine it is 8766** —
   8765 is permanently taken by the OmniControl bridge (`~/DEV/OmniControl/bridge/server.py`).
   `deploy.sh` auto-detects the constant for its final URL echo.
-- Deck personalization lives server-side in `~/Library/Application Support/MacPilot/deck.json`;
+- Deck personalization lives server-side in `~/Library/Application Support/CmdPilot/deck.json`;
   on connect the phone adopts the server deck whenever it has `folders` (server wins over the
   phone's localStorage cache), so seeding/editing that file is how you preconfigure devices.
 - Comments and user-facing strings are predominantly **Korean**; match that when editing existing files.
-- Bundle id prefix `com.joonlab.macpilot`; helper id `com.joonlab.macpilot.helper` (also the launchd label).
+- Bundle id prefix `com.cmdspace.cmdpilot`; helper id `com.cmdspace.cmdpilot.helper` (also the launchd label).
 - Version lives in `project.yml` (`MARKETING_VERSION`), not Info.plist.
 - Keep the **zero-dependency** posture on both sides (no SwiftPM packages, no JS libraries).
