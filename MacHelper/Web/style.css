@@ -69,6 +69,7 @@ html.standalone.kb-open #tabbar { padding-bottom: 0; }
 #bar { display: flex; align-items: center; gap: 8px; padding: 9px 16px; font-size: 14px; flex: 0 0 auto; border-bottom: 1px solid var(--border); }
 .logo-wrap { display: inline-flex; align-items: center; }
 .logo-img { height: 17px; display: block; }
+#bar .brand { font-weight: 800; font-size: 15px; letter-spacing: -0.3px; color: var(--text); }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); transition: background .2s; }
 .dot.on { background: var(--ok); }
 #status { color: var(--text-dim); font-size: 13px; }
@@ -89,9 +90,9 @@ main { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 #tp-handle.open .lbl::after { content: " ▾"; }
 #tp-handle:not(.open) .lbl::after { content: " ▴"; }
 
-#tp-sheet #trackpad { margin: 8px 12px 8px; }
+#tp-sheet #trackpad { margin: 8px 10px; }
 #trackpad { flex: 1; position: relative; background: var(--surface); border-radius: 18px; touch-action: none; overflow: hidden; border: 1px solid var(--border); }
-#click-bar { display: flex; gap: 8px; padding: 0 12px 12px; flex: 0 0 auto; }
+#click-bar { display: flex; gap: 6px; padding: 0 10px 8px; flex: 0 0 auto; }   /* 퀵바와 동일한 10px 좌우 인셋 → 세로 정렬 */
 #click-bar button { flex: 1; padding: 16px 0; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 12px; font-size: 15px; }
 #click-bar button:active, #click-bar button.held { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 #air-btn { flex: 0 0 84px; display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 17px; padding: 8px 0; }

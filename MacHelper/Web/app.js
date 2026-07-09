@@ -385,6 +385,12 @@
     pendingScroll.dy += dy;
     scheduleMotion();
   }
+  // 에어마우스 전용: 틸트=속도 제어(데드존 내장)라 1€ 스무딩은 지연만 얹는다 → 직접 누적으로 즉각 반응.
+  function airQueueMove(dx, dy) {
+    pendingMove.dx += dx;
+    pendingMove.dy += dy;
+    scheduleMotion();
+  }
   function flushMotion(immediate) {
     if (motionTimer) { clearTimeout(motionTimer); motionTimer = null; }
     if (motionRAF) { cancelAnimationFrame(motionRAF); motionRAF = null; }
@@ -700,7 +706,7 @@
     const k = airSensK() * 1.6;                                 // 기울기(도) → px/이벤트
     const vy = Math.abs(dfb) < DEAD ? 0 : -dfb * k;            // 뒤로 기울이면 위, 앞으로 기울이면 아래
     const vx = Math.abs(dlr) < DEAD ? 0 :  dlr * k;            // 오른쪽 기울이면 오른쪽
-    if (vx || vy) queueMove(vx, vy);
+    if (vx || vy) airQueueMove(vx, vy);   // 스무딩 우회(즉각), 감도(airSensitivity)만 반영
   }
 
   async function airRequestPermissions() {
